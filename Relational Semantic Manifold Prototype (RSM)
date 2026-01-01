@@ -1,0 +1,180 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# Relational Semantic Manifold Prototype (RSM)
+# -----------------------------
+# We model a single "claim" moving through a 1D semantic space x(t).
+# Semantic state: (x, v, kappa)
+# Dynamics:
+#   x' = v
+#   v' = -dPhi/dx + constraint_force + external_pressure
+# Curvature proxy:
+#   kappa(t) = |dv/dt|   (in 1D this tracks "semantic bending/acceleration")
+# Drift magnitude:
+#   D(t) = integral |v|_{g_t} dt, where g_t is a time-varying metric scalar.
+# Admissibility region Omega_t:
+#   |x - mu(t)| <= R(t)  (time-varying center and radius), plus curvature bound.
+
+# -----------------------------
+# Configuration
+# -----------------------------
+T = 250                      # steps
+dt = 0.05                    # time step
+t = np.arange(T) * dt
+
+# Evidence-alignment potential (a "truth attractor" to x = 0)
+def Phi(x):
+    return 0.5 * (x ** 2)    # quadratic well
+
+def dPhi_dx(x):
+    return x                 # derivative of 0.5*x^2
+
+# Time-varying metric scalar g_t (changes how "distance" is measured over time)
+# Larger g_t means semantic movement "costs" more (tighter tolerance).
+g_t = 1.0 + 0.7 * (0.5 + 0.5*np.sin(2*np.pi*t/5.0))
+
+# Context drift: the admissible region's center mu(t) slowly shifts,
+# simulating "semantic frame rotation" or changing context.
+mu_t = 0.8*np.sin(2*np.pi*t/12.0) + 0.15*np.sin(2*np.pi*t/2.8)
+
+# Admissible radius R(t) shrinks/expands (e.g., norms tighten/relax).
+R_t = 1.1 - 0.35*(0.5 + 0.5*np.sin(2*np.pi*t/7.0))
+
+# Constraint force: gently pull x toward the admissible center mu(t)
+def constraint_force(x, mu, R):
+    # If inside the region, mild pull; if outside, stronger pull back.
+    dist = x - mu
+    if abs(dist) <= R:
+        return -0.6 * dist
+    else:
+        # stronger restoring force grows with how far outside we are
+        outside = abs(dist) - R
+        return -2.0 * dist - 1.5 * np.sign(dist) * outside
+
+# External pressure: occasional "shocks" (new evidence/events) that perturb motion
+shock = np.zeros(T)
+shock_times = [60, 120, 170, 210]
+shock_mags  = [2.0, -2.4, 1.6, -1.8]
+for st, sm in zip(shock_times, shock_mags):
+    shock[st:st+5] += sm * np.hanning(5)
+
+# Lifecycle thresholds
+kappa_max = 1.8              # too much semantic curvature => instability risk
+drift_max = 8.0              # too much accumulated drift => aging/out-of-scope risk
+
+# -----------------------------
+# Simulation
+# -----------------------------
+x = np.zeros(T)
+v = np.zeros(T)
+a = np.zeros(T)              # acceleration (dv/dt)
+kappa = np.zeros(T)
+drift = np.zeros(T)
+state = [""] * T
+
+# Initial condition: a claim starts somewhat off-center
+x[0] = 1.4
+v[0] = -0.3
+
+for i in range(1, T):
+    # forces
+    f_truth = -dPhi_dx(x[i-1])                          # toward 0
+    f_cons  = constraint_force(x[i-1], mu_t[i-1], R_t[i-1])
+    f_ext   = shock[i-1]
+    
+    # time-varying "gain" based on metric: when g_t is high, we treat movement as costlier
+    # so we damp velocity more. This is a simple way to reflect evolving geometry.
+    damping = 0.12 + 0.10 * (g_t[i-1] - 1.0)
+    
+    # acceleration
+    a[i-1] = (f_truth + f_cons + f_ext) - damping * v[i-1]
+    
+    # integrate
+    v[i] = v[i-1] + a[i-1] * dt
+    x[i] = x[i-1] + v[i] * dt
+    
+    # curvature proxy
+    kappa[i] = abs(a[i-1])
+    
+    # drift integral in metric: |v|_{g_t} = sqrt(g_t)*|v| (1D)
+    drift[i] = drift[i-1] + (np.sqrt(g_t[i-1]) * abs(v[i])) * dt
+    
+    # lifecycle state (admissibility)
+    inside = abs(x[i] - mu_t[i]) <= R_t[i]
+    if inside and kappa[i] <= 0.9*kappa_max and drift[i] <= 0.85*drift_max:
+        state[i] = "ACCEPT"
+    elif inside and (kappa[i] <= kappa_max) and (drift[i] <= drift_max):
+        state[i] = "PROVISIONAL"
+    elif (not inside) and (kappa[i] <= kappa_max*1.25):
+        state[i] = "QUARANTINE"
+    else:
+        state[i] = "REVOKE"
+
+# Build a table for inspection
+df = pd.DataFrame({
+    "t": t,
+    "x": x,
+    "v": v,
+    "kappa": kappa,
+    "drift": drift,
+    "g_t": g_t,
+    "mu_t": mu_t,
+    "R_t": R_t,
+    "state": state
+})
+
+# -----------------------------
+# Visualization
+# -----------------------------
+plt.figure(figsize=(10, 4.8))
+plt.plot(t, x, label="claim position x(t)")
+plt.plot(t, mu_t, label="context center μ(t)")
+plt.plot(t, mu_t + R_t, linestyle="--", label="Ω(t) boundary")
+plt.plot(t, mu_t - R_t, linestyle="--")
+plt.title("Relational Semantic Manifold (1D): claim trajectory vs. time-varying admissible region Ω(t)")
+plt.xlabel("time")
+plt.ylabel("semantic position")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(10, 4.8))
+plt.plot(t, kappa, label="curvature proxy κ(t)=|dv/dt|")
+plt.plot(t, np.full_like(t, kappa_max), linestyle="--", label="κ_max")
+plt.title("Curvature (semantic bending) over time")
+plt.xlabel("time")
+plt.ylabel("κ")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(10, 4.8))
+plt.plot(t, drift, label="drift D(t)=∫ sqrt(g(t))|v(t)| dt")
+plt.plot(t, np.full_like(t, drift_max), linestyle="--", label="D_max")
+plt.title("Accumulated drift (aging / out-of-scope risk)")
+plt.xlabel("time")
+plt.ylabel("drift")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# Show a concise snapshot of the final segment
+df_tail = df.tail(20).reset_index(drop=True)
+import caas_jupyter_tools
+caas_jupyter_tools.display_dataframe_to_user("RSM Prototype (last 20 steps)", df_tail)
+
+# Also summarize state counts
+state_counts = df["state"].value_counts().rename_axis("state").reset_index(name="count")
+caas_jupyter_tools.display_dataframe_to_user("Lifecycle state counts", state_counts)
+STDOUT/STDERR
+Matplotlib is building the font cache; this may take a moment.
+
+Result
+         state  count
+0       REVOKE    165
+1       ACCEPT     53
+2  PROVISIONAL     20
+3   QUARANTINE     11
+4                   1
