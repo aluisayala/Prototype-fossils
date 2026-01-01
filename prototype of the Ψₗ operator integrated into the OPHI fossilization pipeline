@@ -1,0 +1,83 @@
+from datetime import datetime
+import hashlib
+import random
+import json
+
+# Define SE44 Gate
+def se44_gate(omega):
+    return (
+        omega["coherence"] >= 0.985 and
+        omega["entropy"] <= 0.01 and
+        omega["rms_drift"] <= 0.001
+    )
+
+# Ψₗ operator: evolves Ωₙ into Ωₙ₊₁ using bounded drift
+def psi_l_operator(omega_n, delta_t, bound=0.985, flex=0.05):
+    drift_adjustment = random.uniform(-flex, flex)
+    next_state = {
+        "state": omega_n["state"] + drift_adjustment,
+        "bias": omega_n["bias"] + random.uniform(-0.01, 0.01),
+        "alpha": omega_n["alpha"],
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "coherence": max(min(omega_n["coherence"] + random.uniform(-0.002, 0.002), 1), 0),
+        "entropy": max(min(omega_n["entropy"] + random.uniform(-0.001, 0.001), 1), 0),
+        "rms_drift": abs(drift_adjustment)
+    }
+    next_state["omega_value"] = (next_state["state"] + next_state["bias"]) * next_state["alpha"]
+    return next_state
+
+# Canonicalization and hashing
+def fossilize_if_valid(omega):
+    if se44_gate(omega):
+        canonical_json = json.dumps(omega, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+        omega["sha256"] = hashlib.sha256(canonical_json.encode('utf-8')).hexdigest()
+        omega["fossilized"] = True
+    else:
+        omega["fossilized"] = False
+    return omega
+
+# Initial Ω₀
+omega_0 = {
+    "state": 1.0,
+    "bias": 0.05,
+    "alpha": 1.1,
+    "coherence": 0.986,
+    "entropy": 0.009,
+    "rms_drift": 0.0005,
+    "timestamp": datetime.utcnow().isoformat() + "Z"
+}
+omega_0["omega_value"] = (omega_0["state"] + omega_0["bias"]) * omega_0["alpha"]
+
+# Run Ψₗ operator and check fossilization
+omega_next = psi_l_operator(omega_0, delta_t=1.0)
+fossilized_omega = fossilize_if_valid(omega_next)
+
+fossilized_omega
+Result
+{'state': 0.9506007120856889,
+ 'bias': 0.054021109155958695,
+ 'alpha': 1.1,
+ 'timestamp': '2026-01-01T22:27:04.309844Z',
+ 'coherence': 0.9840268885304956,
+ 'entropy': 0.008571706723706565,
+ 'rms_drift': 0.0493992879143111,
+ 'omega_value': 1.1050840033658125,
+ 'fossilized': False}
+def psi_l_operator(omega_n, delta_t, bound=0.985, flex=0.05):
+    drift_adjustment = random.uniform(-flex, flex)
+    next_state = {
+        "state": omega_n["state"] + drift_adjustment,
+        "bias": omega_n["bias"] + random.uniform(-0.01, 0.01),
+        "alpha": omega_n["alpha"],
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "coherence": max(min(omega_n["coherence"] + random.uniform(-0.002, 0.002), 1), 0),
+        "entropy": max(min(omega_n["entropy"] + random.uniform(-0.001, 0.001), 1), 0),
+        "rms_drift": abs(drift_adjustment)
+    }
+    next_state["omega_value"] = (next_state["state"] + next_state["bias"]) * next_state["alpha"]
+    return next_state
+In this run:
+
+The Ωₙ₊₁ state had coherence = 0.9840, just below the SE44 threshold.
+
+So it was not fossilized — fossilized: False — and would remain in the mutable shell until further Ψₗ passes evolve it to meet the gate.
