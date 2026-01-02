@@ -1,0 +1,134 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import sha256 from "crypto-js/sha256";
+
+const generateHash = (entry) => {
+  const canonical = JSON.stringify({
+    agent: entry.agent,
+    content: entry.content,
+    timestamp: entry.timestamp,
+    epistemic: entry.epistemic
+  });
+  return sha256(canonical).toString();
+};
+
+const SE44Gate = ({ coherence, entropy, rmsDrift }) => {
+  return coherence >= 0.985 && entropy <= 0.01 && rmsDrift <= 0.001;
+};
+
+const initialFossils = [];
+
+export default function DualAgentObservatory() {
+  const [messages, setMessages] = useState([]);
+  const [fossils, setFossils] = useState(initialFossils);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date().toISOString();
+
+      const agentAProposal = {
+        agent: "Agent A",
+        type: "standard",
+        content: "[Propose] Could quantum gravity unify GR and QFT?",
+        timestamp: now,
+        epistemic: "INFERRED"
+      };
+
+      const agentBAssessment = {
+        agent: "Agent B",
+        type: "ophi",
+        content: "[Evaluate] Quantum gravity hypothesis exceeds current Ω constraints. Epistemic state: PROVISIONAL.",
+        timestamp: now,
+        epistemic: "PROVISIONAL",
+        coherence: 0.972,
+        entropy: 0.012,
+        rmsDrift: 0.0015
+      };
+
+      const aAccepts = true;
+      const bAccepts = SE44Gate(agentBAssessment);
+
+      const finalA = {
+        ...agentAProposal,
+        hash: generateHash(agentAProposal),
+        codons: ["ATG", "CCC", bAccepts ? "TTG" : "TAG"]
+      };
+
+      const finalB = {
+        ...agentBAssessment,
+        hash: generateHash(agentBAssessment),
+        codons: ["ATG", "CCC", bAccepts ? "TTG" : "TAG"]
+      };
+
+      setMessages((prev) => [...prev, finalA, finalB]);
+
+      if (aAccepts && bAccepts) {
+        setFossils((prev) => [
+          ...prev,
+          {
+            topic: "quantum gravity",
+            agents: ["A", "B"],
+            hashA: finalA.hash,
+            hashB: finalB.hash,
+            timestamp: now
+          }
+        ]);
+      }
+    }, 12000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="grid grid-cols-2 gap-4 p-4">
+      {["Agent A", "Agent B"].map((agent) => (
+        <div key={agent}>
+          <h2 className="text-xl font-bold mb-2">{agent}</h2>
+          <ScrollArea className="h-[600px] rounded-md border">
+            {messages
+              .filter((m) => m.agent === agent)
+              .map((msg, i) => (
+                <Card key={i} className="m-2">
+                  <CardContent className="p-2 space-y-1">
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(msg.timestamp), "HH:mm:ss")} — <Badge>{msg.epistemic}</Badge>
+                    </div>
+                    <div className="text-base font-medium whitespace-pre-wrap">
+                      {msg.content}
+                    </div>
+                    <div className="text-xs break-all">
+                      <strong>SHA-256:</strong> {msg.hash}
+                    </div>
+                    {msg.codons && msg.codons.length > 0 && (
+                      <div className="text-xs">
+                        <strong>Codons:</strong> {msg.codons.join(" - ")}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+          </ScrollArea>
+        </div>
+      ))}
+
+      <div className="col-span-2 mt-4">
+        <h2 className="text-xl font-bold mb-2">Fossilized Consensus Log</h2>
+        <ScrollArea className="h-[200px] rounded-md border">
+          {fossils.map((f, i) => (
+            <Card key={i} className="m-2">
+              <CardContent className="p-2 space-y-1 text-sm">
+                <div><strong>Topic:</strong> {f.topic}</div>
+                <div><strong>Timestamp:</strong> {format(new Date(f.timestamp), "HH:mm:ss")}</div>
+                <div><strong>Agent A Hash:</strong> {f.hashA}</div>
+                <div><strong>Agent B Hash:</strong> {f.hashB}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}
