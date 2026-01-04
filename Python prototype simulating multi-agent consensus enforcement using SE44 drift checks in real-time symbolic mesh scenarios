@@ -1,0 +1,62 @@
+import random
+import time
+from statistics import mean, stdev
+
+# SE44 validation thresholds
+C_MIN = 0.985
+S_MAX = 0.01
+RMS_DRIFT_MAX = 0.001
+
+# Simulate an agent’s symbolic emission
+def generate_emission(agent_id, prev_omega):
+    state = random.uniform(0.4, 0.6)
+    bias = random.uniform(0.1, 0.3)
+    alpha = random.uniform(1.1, 1.3)
+    omega = (state + bias) * alpha
+
+    # Simulate entropy, coherence, and drift
+    entropy = round(random.gauss(0.005, 0.002), 5)
+    coherence = round(random.gauss(0.995, 0.003), 5)
+    rms_drift = abs(omega - prev_omega) if prev_omega else 0
+
+    return {
+        "agent": agent_id,
+        "omega": omega,
+        "coherence": coherence,
+        "entropy": entropy,
+        "rms_drift": rms_drift
+    }
+
+# SE44 Gate
+def validate_emission(e):
+    return (
+        e["coherence"] >= C_MIN and
+        e["entropy"] <= S_MAX and
+        e["rms_drift"] <= RMS_DRIFT_MAX
+    )
+
+# Simulate consensus among agents
+def consensus_phase(agents, prev_omega):
+    emissions = [generate_emission(agent, prev_omega) for agent in agents]
+    valid = [e for e in emissions if validate_emission(e)]
+
+    if len(valid) >= len(agents) // 2 + 1:
+        consensus_omega = mean([e["omega"] for e in valid])
+        print(f"\n✅ Consensus reached. Valid emissions: {len(valid)}/{len(agents)}")
+        print(f"Ω_consensus ≈ {round(consensus_omega, 5)}\n")
+        return consensus_omega
+    else:
+        print(f"\n❌ Consensus failed. Only {len(valid)}/{len(agents)} passed SE44.\n")
+        return prev_omega
+
+# Main simulation loop
+def run_mesh_simulation(agents, ticks=10):
+    omega = None
+    for t in range(ticks):
+        print(f"🕒 Tick {t+1}")
+        omega = consensus_phase(agents, omega)
+        time.sleep(1)
+
+# Initialize
+agents = [f"Agent_{i}" for i in range(1, 10)]
+run_mesh_simulation(agents)
