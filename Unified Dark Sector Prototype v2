@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""
+Unified Dark Sector Prototype v2 — SAFE EDITION
+
+Features:
+- Console simulation output
+- Matplotlib plots
+- Optional CSV export (safe fallback if filesystem is read-only)
+- Parameter sweep mode
+- Mobile / sandbox compatible
+
+Concept based on:
+"The Dark Sector Was Never Two Mysteries — It Was One Decision"
+Luis Ayala
+"""
+
+import math
+import csv
+import argparse
+from dataclasses import dataclass
+from typing import List, Dict, Tuple
+
+import matplotlib.pyplot as plt
+
+
+# ====================================================
+# CONFIGURATION
+# ====================================================
+
+@dataclass
+class Params:
+    omega_m0: float = 0.315
+    gamma0: float = 6 / 11
+    gamma_leak: float = 0.08
+    vacuum_lock: float = 0.985
+    steps: int = 40
+    z_max: float = 5.0
+    out_csv: str = "dark_sector_results.csv"
+
+
+# ====================================================
+# CORE MODEL
+# ====================================================
+
+def vacuum_decision_lock(coherence: float) -> Tuple[float, float]:
+    """
+    Single symmetry decision -> dual geometric projection
+    """
+    coherence = max(0.0, min(1.0, coherence))
+    return coherence, 1.0 - coherence
+
+
+def metric_split(curvature_weight: float, expansion_weight: float) -> Tuple[float, float]:
+    """
+    Metric decomposition proxy
+    g = g_curv + g_exp
+    """
+    return float(curvature_weight), float(expansion_weight)
+
+
+def gamma_z(z: float, p: Params) -> float:
+    """
+    Growth index evolution
+    γ(z) = γ0 + γ1 * z/(1+z)
+    """
+    return p.gamma0 + p.gamma_leak * (z / (1.0 + z))
+
+
+def omega_m_z(z: float, p: Params) -> float:
+    """
+    Matter density evolution (flat universe approximation)
+    """
+    omega_lambda = 1.0 - p.omega_m0
+    Ez2 = p.omega_m0 * (1.0 + z) ** 3 + omega_lambda
+    return (p.omega_m0 * (1.0 + z) ** 3) / Ez2
+
+
+def structure_growth(z: float, p: Params) -> float:
+    """
+    Structure growth function
+    f(z) = Ωm(z)^γ(z)
+    """
+    return omega_m_z(z, p) ** gamma_z(z, p)
+
+
+# ====================================================
+# SIMULATION ENGINE
+# ====================================================
+
+def run_simulation(p: Params) -> List[Dict[str, float]]:
+    print("\n🌑 Unified Dark Sector Simulation")
+    print("=" * 50)
+
+    curv_w, exp_w = vacuum_decision_lock(p.vacuum_lock)
+    g_curv, g_exp = metric_split(curv_w, exp_w)
+
+    print(f"Vacuum Lock Coherence: {p.vacuum_lock}")
+    print(f"Metric Curvature Weight (Dark Matter): {g_curv:.4f}")
+    print(f"Metric Expansion Weight (Dark Energy): {g_exp:.4f}")
+    print("-" * 50)
+
+    dz = p.z_max / p.steps
+    results: List[Dict[str, float]] = []
+
+    for step in range(p.steps + 1):
+        z = step * dz
+
+        gamma = gamma_z(z, p)
+        omega_m = omega_m_z(z, p)
+        growth = structure_growth(z, p)
+
+        row = {
+            "z": round(z, 6),
+            "gamma": round(gamma, 8),
+            "omega_m": round(omega_m, 8),
+            "f_z": round(growth, 8),
+            "vacuum_lock": p.vacuum_lock,
+            "gamma_leak": p.gamma_leak
+        }
+
+        results.append(row)
+
+        print(
+            f"z={row['z']:>4} | "
+            f"γ={row['gamma']} | "
+            f"Ωm={row['omega_m']} | "
+            f"f(z)={row['f_z']}"
+        )
+
+    print("\n✅ Simulation Complete")
+    print("Geometry fossil stream stabilized.")
+
+    return results
+
+
+# ====================================================
+# SAFE CSV EXPORT
+# ====================================================
+
+def save_csv(results: List[Dict[str, float]], filename: str):
+
+    if not results:
+        return
+
+    headers = list(results[0].keys())
+
+    try:
+        with open(filename, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            for row in results:
+                writer.writerow(row)
+
+        print(f"\n📁 CSV exported: {filename}")
+
+    except OSError:
+        print("\n⚠ Filesystem is read-only.")
+        print("CSV export skipped. Showing preview instead:\n")
+
+        print(",".join(headers))
+        for row in results[:10]:
+            print(",".join(str(row[h]) for h in headers))
+
+
+# ====================================================
+# VISUALIZATION
+# ====================================================
+
+def plot_results(results: List[Dict[str, float]], label=""):
+
+    z = [r["z"] for r in results]
+    gamma_vals = [r["gamma"] for r in results]
+    omega_vals = [r["omega_m"] for r in results]
+    growth_vals = [r["f_z"] for r in results]
+
+    # Growth Index Plot
+    plt.figure()
+    plt.plot(z, gamma_vals)
+    plt.xlabel("Redshift (z)")
+    plt.ylabel("γ(z)")
+    plt.title("Growth Index Evolution " + label)
+    plt.grid(True)
+
+    # Matter Density Plot
+    plt.figure()
+    plt.plot(z, omega_vals)
+    plt.xlabel("Redshift (z)")
+    plt.ylabel("Ωm(z)")
+    plt.title("Matter Fraction Evolution " + label)
+    plt.grid(True)
+
+    # Growth Function Plot
+    plt.figure()
+    plt.plot(z, growth_vals)
+    plt.xlabel("Redshift (z)")
+    plt.ylabel("f(z)")
+    plt.title("Structure Growth Function " + label)
+    plt.grid(True)
+
+    plt.show()
+
+
+# ====================================================
+# PARAMETER SWEEP MODE
+# ====================================================
+
+def sweep_mode():
+
+    locks = [0.95, 0.97, 0.985, 0.995]
+    leaks = [0.0, 0.04, 0.08, 0.12]
+
+    print("\n🌌 Vacuum Lock Sweep")
+
+    plt.figure()
+    for lock in locks:
+        p = Params(vacuum_lock=lock)
+        results = run_simulation(p)
+
+        z = [r["z"] for r in results]
+        fz = [r["f_z"] for r in results]
+
+        plt.plot(z, fz, label=f"lock={lock}")
+
+    plt.xlabel("Redshift (z)")
+    plt.ylabel("f(z)")
+    plt.title("Structure Growth vs Vacuum Lock")
+    plt.legend()
+    plt.grid(True)
+
+    print("\n🌌 Leakage Sweep")
+
+    plt.figure()
+    for leak in leaks:
+        p = Params(gamma_leak=leak)
+        results = run_simulation(p)
+
+        z = [r["z"] for r in results]
+        fz = [r["f_z"] for r in results]
+
+        plt.plot(z, fz, label=f"leak={leak}")
+
+    plt.xlabel("Redshift (z)")
+    plt.ylabel("f(z)")
+    plt.title("Structure Growth vs Lock Leakage")
+    plt.legend()
+    plt.grid(True)
+
+    plt.show()
+
+
+# ====================================================
+# MAIN ENTRY
+# ====================================================
+
+def main():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sweep", action="store_true", help="run parameter sweep mode")
+    parser.add_argument("--lock", type=float, default=0.985)
+    parser.add_argument("--leak", type=float, default=0.08)
+    parser.add_argument("--steps", type=int, default=40)
+    parser.add_argument("--zmax", type=float, default=5.0)
+    parser.add_argument("--csv", default="dark_sector_results.csv")
+
+    args = parser.parse_args()
+
+    if args.sweep:
+        sweep_mode()
+        return
+
+    params = Params(
+        vacuum_lock=args.lock,
+        gamma_leak=args.leak,
+        steps=args.steps,
+        z_max=args.zmax,
+        out_csv=args.csv
+    )
+
+    results = run_simulation(params)
+
+    save_csv(results, params.out_csv)
+
+    plot_results(
+        results,
+        label=f"(lock={params.vacuum_lock}, leak={params.gamma_leak})"
+    )
+
+
+if __name__ == "__main__":
+    main()
