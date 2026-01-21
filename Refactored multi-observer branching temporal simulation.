@@ -1,0 +1,454 @@
+"""
+Refactored multi-observer branching temporal simulation.
+- Uses numpy.random.Generator for reproducible RNG.
+- Adds seed argument and deterministic drift (step-based).
+- Robust indexing for manifold sampling.
+- Lightweight Memory.clone to avoid deepcopy.
+- Collects metrics for later plotting / analysis.
+"""
+
+import numpy as np
+import time
+import copy
+import math
+from typing import Optional, List, Tuple
+
+# =========================================================
+# CONFIG
+# =========================================================
+DEFAULT_SEED = 42
+
+dtau = 0.01
+WINDOW = 20
+STEPS = 200
+PRINT_INTERVAL = 10
+
+kappa_fast = 1.0
+kappa_slow = 0.3
+
+BASE_ENTROPY_ALERT = 0.06
+BRANCH_THRESHOLD = 0.12
+PRUNE_THRESHOLD = 0.03
+
+OBS_HORIZON = 2.0
+MAX_BRANCHES = 8
+
+COUPLING_EPS = 0.15
+ENTROPY_FEEDBACK_GAIN = 0.04
+
+SURVIVAL_GAIN = 0.15
+COLLAPSE_PRESSURE = 0.02
+
+COLLAPSE_TRIGGER = 0.18
+ALERT_ADAPT_RATE = 0.005
+
+MEMORY_DECAY = 0.9995
+
+# =========================================================
+# RANDOMNESS: use Generator for reproducibility
+# =========================================================
+def make_rng(seed: Optional[int]) -> np.random.Generator:
+    if seed is None:
+        # non-deterministic seed derived from time
+        seed = int(time.time()) & 0xFFFFFFFF
+    return np.random.default_rng(seed)
+
+# =========================================================
+# BLOCK UNIVERSE
+# =========================================================
+class Metric:
+    def proper_time_step(self, v: float) -> float:
+        return math.sqrt(max(1 - v**2, 0.0)) * dtau
+
+class Event:
+    def __init__(self, t: float, x: float):
+        self.t = t
+        self.x = x
+
+class Manifold:
+    def __init__(self):
+        self.dt = 0.02
+        self.dx = 0.1
+        self.t_vals = np.arange(0.0, 20.0, self.dt)
+        self.x_vals = np.arange(-10.0, 10.0, self.dx)
+
+class ScalarField:
+    def __init__(self, m: Manifold):
+        self.values = np.zeros((len(m.t_vals), len(m.x_vals)))
+        self.step_counter = 0
+
+    def evolve(self, rng: np.random.Generator, entropy_feedback: float = 0.0):
+        # deterministic drift based on an internal counter (reproducible with seed)
+        drift = math.sin(self.step_counter * 0.01) * 0.001
+        noise_std = 0.004 + entropy_feedback
+        noise = rng.normal(0.0, noise_std, self.values.shape)
+        self.values += drift + noise
+        self.step_counter += 1
+
+    def sample(self, ti: int, xi: int):
+        return self.values[ti, xi]
+
+class Worldline:
+    def __init__(self, x0: float):
+        self.t = 0.0
+        self.x = x0
+
+    def step(self, v: float, metric: Metric) -> Tuple[Event, float]:
+        self.t += dtau
+        self.x += v * dtau
+        return Event(self.t, self.x), metric.proper_time_step(v)
+
+# =========================================================
+# PERCEPTION
+# =========================================================
+def sensory_map(state: float, rng: np.random.Generator) -> float:
+    return state + rng.normal(0.0, 0.05)
+
+def now_window(obs: List[float]) -> float:
+    if len(obs) < WINDOW:
+        return float(np.mean(obs))
+    return float(np.mean(obs[-WINDOW:]))
+
+# =========================================================
+# ENTROPY (KL divergence, ensure distributions are valid)
+# =========================================================
+def entropy_rate(p_old: np.ndarray, p_new: np.ndarray) -> float:
+    eps = 1e-9
+    p_old = np.clip(p_old, eps, None)
+    p_new = np.clip(p_new, eps, None)
+    # assume p_old and p_new sum to 1; if not, normalize to be safe
+    p_old = p_old / np.sum(p_old)
+    p_new = p_new / np.sum(p_new)
+    return float(np.sum(p_old * np.log(p_old / p_new)))
+
+# =========================================================
+# BRANCH DIVERSITY METRIC
+# =========================================================
+def branch_diversity(branches: List["Memory"]) -> float:
+    eps = 1e-9
+    weights = np.array([b.weight for b in branches]) + eps
+    weights /= np.sum(weights)
+    return float(-np.sum(weights * np.log(weights)))
+
+# =========================================================
+# MEMORY BRANCH NODE
+# =========================================================
+class Memory:
+    def __init__(self, rng: Optional[np.random.Generator] = None):
+        if rng is None:
+            rng = np.random.default_rng()
+        b = float(rng.random())
+        self.fast_belief = np.array([b, 1.0 - b], dtype=float)
+        self.fast_belief /= np.sum(self.fast_belief)
+        self.slow_belief = np.array([0.5, 0.5], dtype=float)
+        self.weight = 1.0
+        self.fitness = 1.0
+        self.last_entropy = 0.0
+        self.history: List[Tuple[np.ndarray, np.ndarray]] = []
+
+    def predict(self) -> float:
+        return float(self.fast_belief[1])
+
+    def clone(self) -> "Memory":
+        # lightweight clone without deepcopy
+        child = Memory.__new__(Memory)
+        child.fast_belief = self.fast_belief.copy()
+        child.slow_belief = self.slow_belief.copy()
+        child.weight = float(self.weight)
+        child.fitness = float(self.fitness)
+        child.last_entropy = float(self.last_entropy)
+        child.history = list(self.history)
+        return child
+
+    def update(self, obs: float, rng: Optional[np.random.Generator] = None) -> float:
+        if rng is None:
+            rng = np.random.default_rng()
+
+        # likelihood for a binary outcome given observation in [0,1]
+        likelihood = np.array([1.0 - obs, obs], dtype=float)
+
+        # Bayes-ish update on fast belief
+        f_new = self.fast_belief * likelihood
+        # small stochastic exploration
+        f_new += rng.normal(0.0, 0.01, 2)
+        f_new = np.clip(f_new, 1e-6, None)
+        f_new /= np.sum(f_new)
+
+        s_new = 0.9 * self.slow_belief + 0.1 * f_new
+        s_new /= np.sum(s_new)
+
+        sigma_fast = entropy_rate(self.fast_belief, f_new)
+
+        prediction_error = abs(self.predict() - obs)
+        accuracy_reward = (1.0 - prediction_error) * SURVIVAL_GAIN
+        stability_reward = math.exp(-sigma_fast) * SURVIVAL_GAIN
+
+        self.fitness += accuracy_reward + stability_reward
+        self.fitness -= COLLAPSE_PRESSURE
+
+        self.fast_belief = f_new
+        self.slow_belief = s_new
+        self.last_entropy = sigma_fast
+
+        self.history.append((f_new.copy(), s_new.copy()))
+
+        return float(sigma_fast)
+
+# =========================================================
+# IMMORTALITY ANCHOR
+# =========================================================
+def reseed_branch(rng: np.random.Generator) -> Memory:
+    print("🧯 Cognitive reset — branch extinction recovered")
+    return Memory(rng)
+
+# =========================================================
+# GUI CLOCK
+# =========================================================
+class GUIClock:
+    def __init__(self, k: float):
+        self.k = k
+        self.t_hat = 0.0
+
+    def integrate(self, sigma: float) -> float:
+        self.t_hat += self.k * sigma
+        return self.t_hat
+
+# =========================================================
+# Helper: robust sampling from manifold
+# =========================================================
+def sample_obs(event: Event, manifold: Manifold, field: ScalarField) -> Optional[float]:
+    if abs(event.x) > OBS_HORIZON:
+        return None
+
+    # robust index calculation using searchsorted and clipping
+    ti = np.searchsorted(manifold.t_vals, event.t, side="right") - 1
+    ti = int(np.clip(ti, 0, len(manifold.t_vals) - 1))
+
+    xi = np.searchsorted(manifold.x_vals, event.x, side="right") - 1
+    xi = int(np.clip(xi, 0, len(manifold.x_vals) - 1))
+
+    return float(field.sample(ti, xi))
+
+# =========================================================
+# Simulation entrypoint
+# =========================================================
+def run_sim(seed: Optional[int] = DEFAULT_SEED, verbose: bool = True):
+    rng = make_rng(seed)
+
+    metric = Metric()
+    manifold = Manifold()
+    field = ScalarField(manifold)
+
+    obsA = Worldline(-1.0)
+    obsB = Worldline(1.5)
+
+    branchesA: List[Memory] = [Memory(rng)]
+    branchesB: List[Memory] = [Memory(rng)]
+
+    clockA_fast = GUIClock(kappa_fast)
+    clockA_slow = GUIClock(kappa_slow)
+    clockB_fast = GUIClock(kappa_fast)
+    clockB_slow = GUIClock(kappa_slow)
+
+    bufferA: List[float] = []
+    bufferB: List[float] = []
+
+    tauA = 0.0
+    tauB = 0.0
+
+    entropy_feedback = 0.0
+    critical_counter = 0
+
+    entropy_alert = BASE_ENTROPY_ALERT
+
+    # metrics for analysis
+    metrics = {
+        "divA": [], "divB": [],
+        "branchesA": [], "branchesB": [],
+        "tAf": [], "tAs": [], "tBf": [], "tBs": [],
+        "entropy_feedback": [], "entropy_alert": [],
+        "sigA_total": [], "sigB_total": [],
+    }
+
+    if verbose:
+        print("\n>>> MULTI-OBSERVER QUANTUM-BRANCH TEMPORAL SIMULATION\n")
+
+    for step in range(STEPS):
+        # evolve environment
+        field.evolve(rng, entropy_feedback)
+
+        # observers advance
+        eA, dA = obsA.step(0.6, metric)
+        eB, dB = obsB.step(0.4, metric)
+
+        tauA += dA
+        tauB += dB
+
+        sA = sample_obs(eA, manifold, field)
+        sB = sample_obs(eB, manifold, field)
+
+        if sA is not None:
+            bufferA.append(sensory_map(sA, rng))
+        if sB is not None:
+            bufferB.append(sensory_map(sB, rng))
+
+        sigA_total = 0.0
+        sigB_total = 0.0
+
+        if len(bufferA) > 2 and len(bufferB) > 2:
+            nowA = float(np.clip(now_window(bufferA), 0.0, 1.0))
+            nowB = float(np.clip(now_window(bufferB), 0.0, 1.0))
+
+            # ---------- OBSERVER A ----------
+            newA: List[Memory] = []
+            for mem in branchesA:
+                sig = mem.update(nowA, rng)
+                sigA_total += sig
+
+                mem.weight *= MEMORY_DECAY
+
+                if sig > BRANCH_THRESHOLD:
+                    for _ in range(2):
+                        child = mem.clone()
+                        child.fast_belief += rng.normal(0.0, 0.05, 2)
+                        child.fast_belief = np.clip(child.fast_belief, 1e-6, None)
+                        child.fast_belief /= np.sum(child.fast_belief)
+                        child.weight *= math.exp(-sig)
+                        newA.append(child)
+                else:
+                    newA.append(mem)
+
+            branchesA = [b for b in newA if b.weight > PRUNE_THRESHOLD and b.fitness > 0.0]
+
+            if len(branchesA) == 0:
+                branchesA = [reseed_branch(rng)]
+
+            branchesA = branchesA[:MAX_BRANCHES]
+
+            totalA = sum(b.weight for b in branchesA)
+            totalA = max(totalA, 1e-9)
+            for b in branchesA:
+                b.weight /= totalA
+
+            # ---------- OBSERVER B ----------
+            newB: List[Memory] = []
+            for mem in branchesB:
+                sig = mem.update(nowB, rng)
+                sigB_total += sig
+
+                mem.weight *= MEMORY_DECAY
+
+                if sig > BRANCH_THRESHOLD:
+                    for _ in range(2):
+                        child = mem.clone()
+                        child.fast_belief += rng.normal(0.0, 0.05, 2)
+                        child.fast_belief = np.clip(child.fast_belief, 1e-6, None)
+                        child.fast_belief /= np.sum(child.fast_belief)
+                        child.weight *= math.exp(-sig)
+                        newB.append(child)
+                else:
+                    newB.append(mem)
+
+            branchesB = [b for b in newB if b.weight > PRUNE_THRESHOLD and b.fitness > 0.0]
+
+            if len(branchesB) == 0:
+                branchesB = [reseed_branch(rng)]
+
+            branchesB = branchesB[:MAX_BRANCHES]
+
+            totalB = sum(b.weight for b in branchesB)
+            totalB = max(totalB, 1e-9)
+            for b in branchesB:
+                b.weight /= totalB
+
+            # ---------- COUPLING ----------
+            sigA0 = sigA_total
+            sigB0 = sigB_total
+            sigA_total = sigA0 + COUPLING_EPS * (sigB0 - sigA0)
+            sigB_total = sigB0 + COUPLING_EPS * (sigA0 - sigB0)
+
+            # ---------- CLOCKS ----------
+            tAf = clockA_fast.integrate(sigA_total)
+            tAs = clockA_slow.integrate(sigA_total * 0.3)
+            tBf = clockB_fast.integrate(sigB_total)
+            tBs = clockB_slow.integrate(sigB_total * 0.3)
+
+            entropy_feedback = (sigA_total + sigB_total) * ENTROPY_FEEDBACK_GAIN
+
+            # ---------- ALERT ----------
+            entropy_alert += ALERT_ADAPT_RATE * ((sigA_total + sigB_total) - entropy_alert)
+
+            # ---------- CRITICALITY ----------
+            phase_label = "STABLE"
+            if sigA_total > entropy_alert or sigB_total > entropy_alert:
+                critical_counter += 1
+                phase_label = "CRITICAL"
+                if verbose:
+                    print("⚡ PHASE TRANSITION EVENT")
+
+            if sigA_total > COLLAPSE_TRIGGER or sigB_total > COLLAPSE_TRIGGER:
+                phase_label = "COLLAPSE"
+
+            # ---------- COLLAPSE ----------
+            if sigA_total > COLLAPSE_TRIGGER and len(branchesA) > 0:
+                branchesA = [max(branchesA, key=lambda b: b.fitness)]
+
+            if sigB_total > COLLAPSE_TRIGGER and len(branchesB) > 0:
+                branchesB = [max(branchesB, key=lambda b: b.fitness)]
+
+            # ---------- DOMINANT STORY & DIVERSITY ----------
+            leadA = max(branchesA, key=lambda b: b.weight)
+            leadB = max(branchesB, key=lambda b: b.weight)
+
+            divA = branch_diversity(branchesA)
+            divB = branch_diversity(branchesB)
+
+            # record metrics
+            metrics["divA"].append(divA)
+            metrics["divB"].append(divB)
+            metrics["branchesA"].append(len(branchesA))
+            metrics["branchesB"].append(len(branchesB))
+            metrics["tAf"].append(tAf)
+            metrics["tAs"].append(tAs)
+            metrics["tBf"].append(tBf)
+            metrics["tBs"].append(tBs)
+            metrics["entropy_feedback"].append(entropy_feedback)
+            metrics["entropy_alert"].append(entropy_alert)
+            metrics["sigA_total"].append(sigA_total)
+            metrics["sigB_total"].append(sigB_total)
+
+            if step % PRINT_INTERVAL == 0 and verbose:
+                print(f"Step {step:03d} | τA={tauA:.2f} τB={tauB:.2f} "
+                      f"| A_fast={tAf:.2f} B_fast={tBf:.2f} "
+                      f"| branchesA={len(branchesA)} branchesB={len(branchesB)} "
+                      f"| divA={divA:.3f} divB={divB:.3f} "
+                      f"| leadA_fitness={leadA.fitness:.2f} leadB_fitness={leadB.fitness:.2f} "
+                      f"| phase={phase_label}")
+
+    if verbose:
+        print("\n===== COMPLETE =====")
+        print("Observer A GUI fast:", clockA_fast.t_hat)
+        print("Observer A GUI slow:", clockA_slow.t_hat)
+        print("Observer B GUI fast:", clockB_fast.t_hat)
+        print("Observer B GUI slow:", clockB_slow.t_hat)
+        print("Final branch count A:", len(branchesA))
+        print("Final branch count B:", len(branchesB))
+        print("Critical phase duration:", critical_counter)
+
+    return {
+        "metrics": metrics,
+        "branchesA": branchesA,
+        "branchesB": branchesB,
+        "rng": rng,
+        "counters": {"critical": critical_counter},
+        "clocks": {
+            "A_fast": clockA_fast.t_hat,
+            "A_slow": clockA_slow.t_hat,
+            "B_fast": clockB_fast.t_hat,
+            "B_slow": clockB_slow.t_hat,
+        },
+    }
+
+if __name__ == "__main__":
+    # run with deterministic seed
+    results = run_sim(seed=DEFAULT_SEED, verbose=True)
