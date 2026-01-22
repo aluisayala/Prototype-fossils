@@ -1,0 +1,291 @@
+OPHI City — 3D Semantic World Engine (Upgraded Core)
+
+Purpose:
+Create a large-scale, streamed 3D environment where semantic state drives spatial structure, and the OPHI avatar navigates a persistent cognition landscape.
+
+This design prioritizes:
+
+Deterministic world generation
+
+Sector streaming
+
+Semantic-driven geometry
+
+Hybrid avatar movement
+
+Engine-native Python control
+
+📁 Project Structure (Engine-Ready)
+ophi_city_core/
+├── main.py
+├── engine/
+│   ├── world_streamer.py
+│   ├── sector.py
+│   ├── scene_builder.py
+│   ├── entity_manager.py
+│   └── physics.py
+├── semantics/
+│   ├── entropy.py
+│   ├── coherence.py
+│   └── drift.py
+├── city/
+│   ├── buildings.py
+│   ├── roads.py
+│   └── props.py
+├── avatar/
+│   ├── player.py
+│   └── camera.py
+└── assets/
+    └── models/
+
+⚙️ Sector Definition (World Partition Unit)
+engine/sector.py
+class Sector:
+    def __init__(self, sx, sy):
+        self.sx = sx
+        self.sy = sy
+
+        self.entropy = None
+        self.coherence = None
+
+        self.node = None
+        self.loaded = False
+
+
+Each sector represents a streamable spatial container that owns:
+
+Semantic state
+
+Geometry root node
+
+Local entities
+
+🧠 Semantic Generation Layer
+semantics/entropy.py
+import random
+import hashlib
+
+def sector_seed(sx, sy):
+    h = hashlib.sha256(f"{sx}:{sy}".encode()).hexdigest()
+    return int(h[:16], 16)
+
+def generate_entropy(sx, sy):
+    rng = random.Random(sector_seed(sx, sy))
+    return rng.uniform(0, 1)
+
+semantics/coherence.py
+def generate_coherence(entropy):
+    base = 0.85
+    coherence = base - entropy * 0.35
+    return max(0.0, min(1.0, coherence))
+
+
+Semantic state becomes the primary driver of spatial behavior.
+
+🌍 World Streaming System
+engine/world_streamer.py
+from engine.sector import Sector
+from semantics.entropy import generate_entropy
+from semantics.coherence import generate_coherence
+from engine.scene_builder import build_sector_scene
+
+SECTOR_SIZE = 200
+ACTIVE_RADIUS = 2
+
+class WorldStreamer:
+
+    def __init__(self, player, render):
+        self.player = player
+        self.render = render
+        self.loaded_sectors = {}
+
+    def update(self):
+        psx, psy = self.player.sector_position()
+
+        required = set()
+        for dx in range(-ACTIVE_RADIUS, ACTIVE_RADIUS + 1):
+            for dy in range(-ACTIVE_RADIUS, ACTIVE_RADIUS + 1):
+                required.add((psx + dx, psy + dy))
+
+        # Load required sectors
+        for key in required:
+            if key not in self.loaded_sectors:
+                self.loaded_sectors[key] = self.load_sector(*key)
+
+        # Unload inactive sectors
+        for key in list(self.loaded_sectors.keys()):
+            if key not in required:
+                self.unload_sector(key)
+
+    def load_sector(self, sx, sy):
+        sector = Sector(sx, sy)
+
+        sector.entropy = generate_entropy(sx, sy)
+        sector.coherence = generate_coherence(sector.entropy)
+
+        sector.node = build_sector_scene(
+            sector,
+            self.render
+        )
+
+        sector.loaded = True
+        return sector
+
+    def unload_sector(self, key):
+        sector = self.loaded_sectors[key]
+
+        if sector.node:
+            sector.node.removeNode()
+
+        del self.loaded_sectors[key]
+
+
+This provides:
+
+Rolling world window
+
+Memory-safe streaming
+
+Deterministic regeneration
+
+Semantic continuity
+
+🏗️ Scene Builder (Semantic → Geometry Bridge)
+engine/scene_builder.py
+from panda3d.core import NodePath
+from city.buildings import generate_building_mesh
+
+SECTOR_SIZE = 200
+
+def build_sector_scene(sector, render):
+    root = NodePath(f"sector_{sector.sx}_{sector.sy}")
+    root.reparentTo(render)
+
+    root.setPos(
+        sector.sx * SECTOR_SIZE,
+        sector.sy * SECTOR_SIZE,
+        0
+    )
+
+    building_model = generate_building_mesh(
+        sector.entropy,
+        sector.coherence
+    )
+
+    building_model.reparentTo(root)
+
+    return root
+
+
+This layer translates:
+
+Semantic state → Physical structure
+
+🏢 Procedural Building Selector
+city/buildings.py
+from panda3d.core import Loader
+
+loader = Loader.getGlobalPtr()
+
+def generate_building_mesh(entropy, coherence):
+
+    if entropy > 0.7:
+        model = loader.loadModel("assets/models/damaged_tower.bam")
+
+    elif coherence > 0.9:
+        model = loader.loadModel("assets/models/clean_tower.bam")
+
+    else:
+        model = loader.loadModel("assets/models/organic_block.bam")
+
+    return model
+
+
+This makes spatial form directly responsive to semantic values.
+
+🧍 Avatar Movement System
+avatar/player.py
+class Player:
+
+    def __init__(self, node):
+        self.node = node
+
+    def move(self, direction, dt):
+        self.node.setPos(self.node, direction * dt)
+
+    def sector_position(self):
+        x, y, _ = self.node.getPos()
+        return int(x // 200), int(y // 200)
+
+🎥 Camera System
+avatar/camera.py
+def setup_third_person(camera, player):
+
+    camera.reparentTo(player.node)
+    camera.setPos(0, -12, 4)
+    camera.lookAt(player.node)
+
+
+Supports:
+
+Follow behavior
+
+Exploration mode
+
+Hybrid navigation setups
+
+🚀 Engine Entry Point
+main.py
+from direct.showbase.ShowBase import ShowBase
+from panda3d.core import NodePath
+
+from avatar.player import Player
+from avatar.camera import setup_third_person
+from engine.world_streamer import WorldStreamer
+
+class OPHICityApp(ShowBase):
+
+    def __init__(self):
+        super().__init__()
+
+        self.player_node = NodePath("player")
+        self.player_node.reparentTo(self.render)
+        self.player_node.setPos(0, 0, 0)
+
+        self.player = Player(self.player_node)
+
+        setup_third_person(self.camera, self.player)
+
+        self.world = WorldStreamer(self.player, self.render)
+
+        self.taskMgr.add(self.update_loop, "update_loop")
+
+    def update_loop(self, task):
+        dt = globalClock.getDt()
+
+        # Movement hooks go here
+
+        self.world.update()
+        return task.cont
+
+
+app = OPHICityApp()
+app.run()
+
+What This Upgrade Gives You
+
+You now have:
+
+A streamed world backbone
+
+Deterministic semantic generation
+
+Sector-based spatial partitioning
+
+Geometry tied to OPHI logic
+
+Expandable entity architecture
+
+Clean engine separation
+
+This is no longer a prototype concept — this is a simulation foundation.
