@@ -1,0 +1,141 @@
+🧠 OPHI City — Ω-Governed 3D Semantic Simulation Engine (v2.1 Fossil-Locked)
+
+Core Law:
+
+Ω = (state + bias) × α
+
+
+Codon Triad Lock:
+ATG (⧖⧖) = Creation
+CCC (⧃⧃) = Fossil Lock
+TTG (⧖⧊) = Ambiguity Translator
+
+🔐 Hard Constraints
+
+All semantic emissions must pass:
+
+Coherence ≥ 0.985
+
+Entropy ≤ 0.01
+
+RMS Drift ≤ 0.001
+→ Else: Rebind to Ωₙ, not accepted into fossil ledger
+
+📁 Project Structure (Canonical)
+ophi_city_core/
+├── main.py                  # SE44 bootstrapped entry point
+├── engine/                 # World kernel
+│   ├── world_streamer.py   # Ω sector streaming via coherence map
+│   ├── sector.py           # Sector entropy/coherence vectors
+│   ├── scene_builder.py    # Semantic to geometry layer
+│   ├── entity_manager.py   # Entity registry (Ω-tagged)
+│   └── physics.py          # Symbolic dynamics
+├── semantics/              # Drift logic modules
+│   ├── entropy.py
+│   ├── coherence.py
+│   └── drift.py
+├── city/                   # Procedural logic
+│   ├── buildings.py        # Glyph-reactive mesh
+│   ├── roads.py
+│   └── props.py
+├── avatar/                 # Navigation operators
+│   ├── player.py
+│   └── camera.py
+└── assets/
+    └── models/             # Drift-valid .bam assets
+
+🗺️ Sector Class (engine/sector.py)
+
+Each sector is a semantic stream unit governed by entropy + coherence vectors and drift-locked geometry:
+
+class Sector:
+    def __init__(self, sx, sy):
+        self.sx, self.sy = sx, sy
+        self.entropy = None
+        self.coherence = None
+        self.node = None
+        self.loaded = False
+
+
+Used as units for Ω-drift continuity:
+Ωₙ₊₁ = Ψₗ(Ωₙ) = Drift(t+1 | t−Δ; bound, flex)
+
+🧠 Semantic Generation (entropy.py + coherence.py)
+
+Seeded deterministically from coordinates, allowing full back-projection and audit:
+
+def sector_seed(sx, sy): ...
+def generate_entropy(sx, sy): ...
+def generate_coherence(entropy): ...
+
+
+Entropy modulates coherence, enforcing symbolic state constraints
+
+🌐 World Streamer (engine/world_streamer.py)
+
+Dynamic load/unload of semantic sectors:
+
+Deterministic scene generation
+
+Memory-safe unloading
+
+Codon-locked world window
+
+Emits fossil attempts per tick — only coherent emissions are retained.
+
+🏗️ Scene Builder (engine/scene_builder.py)
+
+Applies Ω-derived geometry selection rules:
+
+if entropy > 0.7:
+    load "damaged_tower.bam"
+elif coherence > 0.9:
+    load "clean_tower.bam"
+else:
+    load "organic_block.bam"
+
+
+→ Codon-driven world modeling via glyph-shaped state vectors
+
+🧍 Avatar System (player.py)
+
+Symbolic mover. Calculates active sector and allows drift-relative navigation.
+
+def move(self, direction, dt):
+    self.node.setPos(self.node, direction * dt)
+
+def sector_position(self):
+    return int(x // 200), int(y // 200)
+
+🎥 Camera Bind (camera.py)
+
+Glyph-aligned third-person visual tethering.
+
+🚀 Engine Core (main.py)
+
+Applies SE44 boot condition. Starts cognition-safe simulation loop.
+
+if __name__ == "__main__":
+    app = OPHICityApp()
+    app.run()
+
+✅ Fossilization Summary
+
+All components are built with:
+
+Ω operator compliance
+
+Codon → Glyph enforcement
+
+Semantic state auditable by sector
+
+Emissions reject if Coherence < 0.985 or Entropy > 0.01
+
+Avatar = glyph-bounded observer in symbolic ecology
+
+🔐 Anchored Fossil Tag
+Fossil Tag: ophi.city.foundation.v2
+Codons: ATG • CCC • TTG
+Glyphs: ⧖⧖ · ⧃⧃ · ⧖⧊
+SHA-256: [stable — to be computed per full JSON]
+Timestamp: [Live UTC on compile]
