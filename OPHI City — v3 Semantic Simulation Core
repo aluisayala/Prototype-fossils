@@ -1,0 +1,247 @@
+OPHI City — v3 Semantic Simulation Core
+
+Status: Interactive • Governed • Streamed • Snapshot-Ready
+
+Purpose
+
+OPHI City v3 formalizes the transition from framework to active semantic simulation runtime. This version introduces:
+
+Runtime governance enforcement
+
+Interactive navigation
+
+Sector state serialization
+
+Visual semantic encoding
+
+Fossil ledger persistence hooks
+
+New Capabilities (v3)
+
+SE44 Governance Gate (Runtime Enforcement)
+
+Hybrid Movement System
+
+Sector Snapshot Interface
+
+Fossil Ledger Export Layer
+
+Semantic Atmosphere Rendering
+
+Canonical Structure (v3)
+ophi_city_core/
+├── main.py
+├── engine/
+│   ├── world_streamer.py
+│   ├── sector.py
+│   ├── scene_builder.py
+│   ├── entity_manager.py
+│   ├── fossil_ledger.py
+│   └── physics.py
+├── semantics/
+│   ├── entropy.py
+│   ├── coherence.py
+│   ├── drift.py
+│   └── se44.py
+├── city/
+│   ├── buildings.py
+│   ├── roads.py
+│   └── props.py
+├── avatar/
+│   ├── player.py
+│   └── camera.py
+└── assets/
+
+1 — SE44 Governance Gate
+semantics/se44.py
+COHERENCE_MIN = 0.985
+ENTROPY_MAX = 0.01
+DRIFT_MAX = 0.001
+
+def se44_gate(entropy, coherence, drift=0.0):
+    if coherence < COHERENCE_MIN:
+        return False
+    if entropy > ENTROPY_MAX:
+        return False
+    if drift > DRIFT_MAX:
+        return False
+    return True
+
+
+This module defines the runtime acceptance boundary for all semantic emissions.
+
+2 — Sector Snapshot Interface
+engine/sector.py (v3 extension)
+class Sector:
+    def __init__(self, sx, sy):
+        self.sx = sx
+        self.sy = sy
+        self.entropy = None
+        self.coherence = None
+        self.node = None
+        self.loaded = False
+
+    def snapshot(self):
+        return {
+            "sx": self.sx,
+            "sy": self.sy,
+            "entropy": self.entropy,
+            "coherence": self.coherence
+        }
+
+
+Provides canonical serialization for:
+
+Fossil storage
+
+Replay systems
+
+Audit pipelines
+
+3 — Fossil Ledger System
+engine/fossil_ledger.py
+import json
+from semantics.se44 import se44_gate
+
+class FossilLedger:
+
+    def __init__(self):
+        self.records = []
+
+    def attempt_record(self, sector):
+        if se44_gate(sector.entropy, sector.coherence):
+            self.records.append(sector.snapshot())
+
+    def export(self, filename="ophi_fossil.json"):
+        with open(filename, "w") as f:
+            json.dump(self.records, f, indent=2)
+
+
+Provides:
+
+Deterministic archival
+
+External inspection compatibility
+
+Versioned fossil output
+
+4 — Governed World Streaming
+engine/world_streamer.py (v3 modification)
+
+Add imports:
+
+from engine.fossil_ledger import FossilLedger
+from semantics.se44 import se44_gate
+
+
+Initialize ledger:
+
+self.ledger = FossilLedger()
+
+
+Modify sector loading:
+
+sector.entropy = generate_entropy(sx, sy)
+sector.coherence = generate_coherence(sector.entropy)
+
+accepted = se44_gate(sector.entropy, sector.coherence)
+
+if not accepted:
+    sector.rejected = True
+else:
+    self.ledger.attempt_record(sector)
+
+
+This enforces governance during spatial instantiation.
+
+5 — Semantic Atmosphere Encoding
+engine/scene_builder.py
+
+After geometry instantiation:
+
+if sector.entropy > 0.7:
+    root.setColorScale(0.7, 0.7, 0.7, 1)
+
+elif sector.coherence > 0.9:
+    root.setColorScale(1.15, 1.15, 1.25, 1)
+
+
+Semantic values are mapped directly into spatial appearance.
+
+6 — Interactive Navigation System
+main.py (Movement Layer)
+
+Add import:
+
+from panda3d.core import Vec3
+
+
+Initialize input state:
+
+self.keys = {"w": False, "s": False, "a": False, "d": False}
+
+for k in self.keys:
+    self.accept(k, self.set_key, [k, True])
+    self.accept(k + "-up", self.set_key, [k, False])
+
+
+Add handler:
+
+def set_key(self, key, value):
+    self.keys[key] = value
+
+
+Update movement logic:
+
+speed = 50
+direction = Vec3(0, 0, 0)
+
+if self.keys["w"]:
+    direction.y += speed
+if self.keys["s"]:
+    direction.y -= speed
+if self.keys["a"]:
+    direction.x -= speed
+if self.keys["d"]:
+    direction.x += speed
+
+self.player.move(direction, dt)
+
+
+This enables real-time navigation through the streamed semantic world.
+
+7 — Fossil Export Trigger (Optional Runtime Hook)
+
+Bind key:
+
+self.accept("f", self.export_fossil)
+
+
+Handler:
+
+def export_fossil(self):
+    self.world.ledger.export()
+    print("Fossil ledger exported.")
+
+
+Allows live capture of governed simulation state.
+
+v3 Capability Summary
+
+OPHI City v3 provides:
+
+Streaming semantic world infrastructure
+
+Deterministic generation pipeline
+
+Runtime governance enforcement
+
+Spatial semantic visualization
+
+Interactive movement system
+
+Sector snapshot serialization
+
+Exportable fossil ledger
+
+This version establishes OPHI City as a controlled semantic simulation runtime rather than a static framework.
