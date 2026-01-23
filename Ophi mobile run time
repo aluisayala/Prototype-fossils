@@ -1,0 +1,244 @@
+# OPHI City — Mobile Single File Runtime
+# Panda3D compatible (Pydroid3 / Desktop)
+# Author: OPHI Core
+
+from direct.showbase.ShowBase import ShowBase
+from panda3d.core import NodePath, DirectionalLight, AmbientLight, Loader
+import random, hashlib, math
+
+# =========================
+# CONFIG
+# =========================
+
+SECTOR_SIZE = 200
+ACTIVE_RADIUS = 2
+MOVE_SPEED = 40
+
+loader = Loader.getGlobalPtr()
+
+# =========================
+# SEMANTIC LAYER
+# =========================
+
+def sector_seed(sx, sy):
+    h = hashlib.sha256(f"{sx}:{sy}".encode()).hexdigest()
+    return int(h[:16], 16)
+
+def generate_entropy(sx, sy):
+    rng = random.Random(sector_seed(sx, sy))
+    return rng.uniform(0, 1)
+
+def generate_coherence(entropy):
+    base = 0.85
+    coherence = base - entropy * 0.35
+    return max(0.0, min(1.0, coherence))
+
+# =========================
+# SECTOR OBJECT
+# =========================
+
+class Sector:
+
+    def __init__(self, sx, sy):
+        self.sx = sx
+        self.sy = sy
+        self.entropy = None
+        self.coherence = None
+        self.node = None
+        self.loaded = False
+
+# =========================
+# PROCEDURAL BUILDINGS
+# =========================
+
+def generate_building_mesh(entropy, coherence):
+
+    try:
+        if entropy > 0.7:
+            model = loader.loadModel("assets/models/damaged_tower.bam")
+
+        elif coherence > 0.9:
+            model = loader.loadModel("assets/models/clean_tower.bam")
+
+        else:
+            model = loader.loadModel("assets/models/organic_block.bam")
+
+    except:
+        # fallback primitive if assets missing
+        model = loader.loadModel("models/box")
+
+    scale = 2 + coherence * 3
+    model.setScale(scale, scale, scale * (1 + entropy))
+
+    return model
+
+# =========================
+# SCENE BUILDER
+# =========================
+
+def build_sector_scene(sector, render):
+
+    root = NodePath(f"sector_{sector.sx}_{sector.sy}")
+    root.reparentTo(render)
+
+    root.setPos(
+        sector.sx * SECTOR_SIZE,
+        sector.sy * SECTOR_SIZE,
+        0
+    )
+
+    building = generate_building_mesh(
+        sector.entropy,
+        sector.coherence
+    )
+
+    building.reparentTo(root)
+    building.setZ(building.getScale().getZ() / 2)
+
+    return root
+
+# =========================
+# PLAYER
+# =========================
+
+class Player:
+
+    def __init__(self, node):
+        self.node = node
+
+    def move(self, dx, dy, dt):
+        self.node.setX(self.node.getX() + dx * MOVE_SPEED * dt)
+        self.node.setY(self.node.getY() + dy * MOVE_SPEED * dt)
+
+    def sector_position(self):
+        x, y, _ = self.node.getPos()
+        return int(x // SECTOR_SIZE), int(y // SECTOR_SIZE)
+
+# =========================
+# CAMERA
+# =========================
+
+def setup_third_person(camera, player):
+    camera.reparentTo(player.node)
+    camera.setPos(0, -18, 6)
+    camera.lookAt(player.node)
+
+# =========================
+# WORLD STREAMER
+# =========================
+
+class WorldStreamer:
+
+    def __init__(self, player, render):
+        self.player = player
+        self.render = render
+        self.loaded_sectors = {}
+
+    def update(self):
+
+        psx, psy = self.player.sector_position()
+
+        required = set()
+
+        for dx in range(-ACTIVE_RADIUS, ACTIVE_RADIUS + 1):
+            for dy in range(-ACTIVE_RADIUS, ACTIVE_RADIUS + 1):
+                required.add((psx + dx, psy + dy))
+
+        # Load new sectors
+        for key in required:
+            if key not in self.loaded_sectors:
+                self.loaded_sectors[key] = self.load_sector(*key)
+
+        # Unload old sectors
+        for key in list(self.loaded_sectors.keys()):
+            if key not in required:
+                self.unload_sector(key)
+
+    def load_sector(self, sx, sy):
+
+        sector = Sector(sx, sy)
+
+        sector.entropy = generate_entropy(sx, sy)
+        sector.coherence = generate_coherence(sector.entropy)
+
+        sector.node = build_sector_scene(sector, self.render)
+        sector.loaded = True
+
+        return sector
+
+    def unload_sector(self, key):
+
+        sector = self.loaded_sectors[key]
+
+        if sector.node:
+            sector.node.removeNode()
+
+        del self.loaded_sectors[key]
+
+# =========================
+# MAIN APP
+# =========================
+
+class OPHICityApp(ShowBase):
+
+    def __init__(self):
+
+        super().__init__()
+        self.disableMouse()
+
+        # Lighting
+        sun = DirectionalLight("sun")
+        sun_np = self.render.attachNewNode(sun)
+        sun_np.setHpr(45, -60, 0)
+        self.render.setLight(sun_np)
+
+        ambient = AmbientLight("ambient")
+        ambient.setColor((0.3, 0.3, 0.3, 1))
+        amb_np = self.render.attachNewNode(ambient)
+        self.render.setLight(amb_np)
+
+        # Player
+        self.player_node = NodePath("player")
+        self.player_node.reparentTo(self.render)
+        self.player_node.setPos(0, 0, 0)
+
+        self.player = Player(self.player_node)
+
+        # Camera
+        setup_third_person(self.camera, self.player)
+
+        # World
+        self.world = WorldStreamer(self.player, self.render)
+
+        # Controls
+        self.keys = {"w":0,"s":0,"a":0,"d":0}
+
+        for k in self.keys:
+            self.accept(k, self.set_key, [k,1])
+            self.accept(k+"-up", self.set_key, [k,0])
+
+        self.taskMgr.add(self.update_loop, "update_loop")
+
+    def set_key(self, key, value):
+        self.keys[key] = value
+
+    def update_loop(self, task):
+
+        dt = globalClock.getDt()
+
+        dx = self.keys["d"] - self.keys["a"]
+        dy = self.keys["w"] - self.keys["s"]
+
+        self.player.move(dx, dy, dt)
+
+        self.world.update()
+
+        return task.cont
+
+
+# =========================
+# BOOT
+# =========================
+
+app = OPHICityApp()
+app.run()
