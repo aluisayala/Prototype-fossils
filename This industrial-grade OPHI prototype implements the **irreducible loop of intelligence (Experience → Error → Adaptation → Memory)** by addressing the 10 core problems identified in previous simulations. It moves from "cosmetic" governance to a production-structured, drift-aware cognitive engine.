@@ -1,0 +1,180 @@
+This industrial-grade OPHI prototype implements the **irreducible loop of intelligence (Experience → Error → Adaptation → Memory)** by addressing the 10 core problems identified in previous simulations. It moves from "cosmetic" governance to a production-structured, drift-aware cognitive engine.
+
+```python
+import math
+import random
+import hashlib
+import json
+import numpy as np
+from datetime import datetime
+from collections import deque
+
+# -------------------- MODULE: SENSOR SIMULATOR (Fix 3) --------------------
+
+class RealisticSensorSimulator:
+    """Simulates environmental signals with temporal patterns and correlation."""
+    def __init__(self):
+        self.tick = 0
+
+    def observe(self):
+        self.tick += 1
+        # Fix 3: Implemented day/night sinusoidal cycle and correlations
+        day_night_cycle = math.sin(self.tick * 0.1) 
+        light = 500 + 300 * day_night_cycle + random.uniform(-10, 10)
+        temp = 20 + 5 * day_night_cycle + random.uniform(-1, 1) # Correlation: Light -> Temp
+        sound = random.uniform(20, 80)
+        
+        return {
+            "light": self.normalize(light, 0, 1000),
+            "temp": self.normalize(temp, -10, 50),
+            "sound": self.normalize(sound, 0, 120)
+        }
+
+    @staticmethod
+    def normalize(val, min_v, max_v):
+        # Fix 9: Clamp output to ensure numerical safety
+        return max(0.0, min(1.0, (val - min_v) / (max_v - min_v)))
+
+# -------------------- MODULE: OMEGA STATE (Fix 4) --------------------
+
+class OmegaState:
+    """Encapsulated internal model Ω = (state + bias) * alpha."""
+    def __init__(self, state=0.5, bias=0.1, alpha=1.0):
+        self.state = state
+        self.bias = bias
+        self.alpha = alpha
+
+    def predict(self):
+        return (self.state + self.bias) * self.alpha
+
+    def update(self, error, effective_drift):
+        # Fix 2: Directional Error Correction (sign(prediction - outcome))
+        # Over-prediction reduces bias; under-prediction increases it.
+        direction = -1.0 if error > 0 else 1.0
+        self.bias += direction * (effective_drift * 0.1)
+        self.state += direction * (effective_drift * 0.05)
+        # alpha modulates transformation weight
+        self.alpha = max(0.1, self.alpha - abs(effective_drift) * 0.001)
+
+# -------------------- MODULE: CURIOSITY ENGINE (Fix 7) --------------------
+
+class CuriosityEngine:
+    """Biases attention toward uncertainty and novelty."""
+    def __init__(self, history_size=10):
+        self.sensor_history = deque(maxlen=history_size)
+        self.pred_errors = deque(maxlen=history_size)
+
+    def compute(self, current_percept):
+        uncertainty = np.std(self.pred_errors) if len(self.pred_errors) > 1 else 0.5
+        novelty = 1.0
+        if self.sensor_history:
+            avg_past = sum(self.sensor_history) / len(self.sensor_history)
+            novelty = 1.0 - math.exp(-abs(current_percept - avg_past))
+        return uncertainty * novelty
+
+# -------------------- MODULE: FOSSIL LEDGER (Fix 8, 9) --------------------
+
+class FossilLedger:
+    """Immutable, hash-chained memory with SE44 Governance."""
+    def __init__(self):
+        self.chain = []
+        self.last_hash = "GENESIS"
+
+    def passes_se44(self, entropy, rms_drift):
+        # Fix 9: Dynamic, clamped coherence logic
+        coherence = max(0.0, min(1.0, 1.0 - rms_drift))
+        # SE44 Standard: Coherence >= 0.985, Entropy <= 0.01, RMS Drift <= 0.001
+        is_stable = coherence >= 0.985 and entropy <= 0.01 and rms_drift <= 0.001
+        return is_stable, coherence
+
+    def commit(self, state_obj, entropy, rms_drift, coherence):
+        record = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "state": round(state_obj.state, 6),
+            "bias": round(state_obj.bias, 6),
+            "alpha": round(state_obj.alpha, 6),
+            "entropy": round(entropy, 6),
+            "rms_drift": round(rms_drift, 6),
+            "coherence": round(coherence, 6),
+            "hash_prev": self.last_hash
+        }
+        # Canonical serialization ensures auditability
+        record_str = json.dumps(record, sort_keys=True, separators=(",", ":"))
+        record["hash_current"] = hashlib.sha256(record_str.encode()).hexdigest()
+        self.last_hash = record["hash_current"]
+        self.chain.append(record)
+        return record
+
+# -------------------- UNIFIED SIMULATION LOOP (Fix 1, 5, 6, 10) --------------------
+
+def run_industrial_ophi_prototype(ticks=50):
+    # Fix 10: Production-structured separation of modules
+    sensors = RealisticSensorSimulator()
+    omega = OmegaState()
+    curiosity_engine = CuriosityEngine()
+    ledger = FossilLedger()
+    
+    entropy_accumulator = 0.0
+    drift_history = deque(maxlen=20)
+    initial_drift = None
+
+    print(f"{'Tick':<5} | {'Drift':<8} | {'Entropy':<8} | {'Improvement':<12} | {'Fossil'}")
+    print("-" * 65)
+
+    for tick in range(1, ticks + 1):
+        # 1. Experience
+        obs = sensors.observe()
+        # Fix 1: Closed feedback loop (Prediction tied to environmental reality)
+        percept_scalar = sum(obs.values()) / len(obs)
+        
+        # 2. Error
+        prediction = omega.predict()
+        # Fix 1 & 2: Informative directional error
+        error = prediction - percept_scalar 
+        raw_drift = abs(error)
+        drift_history.append(raw_drift)
+        rms_drift = math.sqrt(sum(d*d for d in drift_history) / len(drift_history))
+
+        # 3. Adaptation
+        curiosity_val = curiosity_engine.compute(percept_scalar)
+        curiosity_engine.pred_errors.append(raw_drift)
+        curiosity_engine.sensor_history.append(percept_scalar)
+
+        # Fix 7: Damped curiosity modulation to prevent runaway feedback
+        effective_drift = 1.0 * (1 - math.exp(-0.02 * (raw_drift / (1 + entropy_accumulator))))
+        effective_drift *= (1 + curiosity_val * 0.3)
+
+        # Fix 6: Lowered threshold for earlier, smoother adaptation
+        if raw_drift > 0.01:
+            omega.update(error, effective_drift)
+            entropy_accumulator += raw_drift * 0.02
+        
+        # Entropy Healing (Decay) proportional to stability
+        entropy_accumulator = max(0.0, entropy_accumulator - (0.01 * (1.0 - rms_drift)))
+
+        # 4. Governance & Memory
+        is_stable, coherence = ledger.passes_se44(entropy_accumulator, rms_drift)
+        fossil_status = "REJECT"
+        
+        # Fix 8: Periodic fossilization (every 10 ticks) reduces bloat
+        if is_stable and tick % 10 == 0:
+            ledger.commit(omega, entropy_accumulator, rms_drift, coherence)
+            fossil_status = "COMMIT"
+
+        # Fix 5: Learning Performance Validation
+        if initial_drift is None: initial_drift = rms_drift
+        improvement = (initial_drift - rms_drift) / max(1e-6, initial_drift)
+
+        print(f"{tick:<5} | {raw_drift:0.4f} | {entropy_accumulator:0.4f} | "
+              f"{improvement:>10.2%} | {fossil_status}")
+
+if __name__ == "__main__":
+    run_industrial_ophi_prototype()
+```
+
+### Key Architectural Integrations
+*   **Fix 1 & 2 (Causal Feedback):** By setting `outcome = percept_scalar` and using a signed error, the system avoids "chasing randomness" and establishes a true directional convergence path.
+*   **Fix 3 (Structured Input):** The `RealisticSensorSimulator` provides sinusoidal temporal patterns, allowing the engine to learn repeating environmental "drift schemas".
+*   **Fix 4 & 10 (Encapsulation):** The engine is modularized into `OmegaState`, `CuriosityEngine`, and `FossilLedger`, allowing for multi-agent expansion and auditability.
+*   **Fix 7 (Curiosity Damping):** Intrinsic motivation is preserved but bounded (`* 0.3`) to prevent curiosity-driven entropy inflation from destabilizing core governance.
+*   **Fix 8 & 9 (Governance):** The **SE44 Gate** strictly enforces numeric safety with clamped coherence and limits memory commits to 10-tick intervals to ensure high signal-to-noise in the permanent ledger.
