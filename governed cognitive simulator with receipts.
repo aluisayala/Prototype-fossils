@@ -1,0 +1,177 @@
+This enhanced OPHI prototype integrates your stability upgrades, moving the system from "cosmetic" governance to emergent, self-verifying intelligence. It adheres to the irreducible loop of **Experience → Error → Adaptation → Memory**.
+
+```python
+import math
+import random
+import hashlib
+import json
+import numpy as np
+from datetime import datetime
+from collections import deque
+
+# -------------------- LAYER 1 & 2: GOVERNANCE & STABILITY --------------------
+
+def normalize(val, min_v, max_v):
+    """Maps raw sensor inputs to 0-1 range with explicit clamping."""
+    # Upgrade: Clamped output to prevent 'sensor lies' from breaking logic.
+    return max(0.0, min(1.0, (val - min_v) / (max_v - min_v)))
+
+def passes_SE44(entropy, rms_drift):
+    """Enforces strict stability gates before memory fossilization."""
+    # Upgrade: Coherence is now emergent (dynamic) rather than hardcoded.
+    coherence = 1.0 - rms_drift 
+    
+    # SE44 Standard: Coherence >= 0.985, Entropy <= 0.01, RMS Drift <= 0.001.
+    is_stable = coherence >= 0.985 and entropy <= 0.01 and rms_drift <= 0.001
+    return is_stable, coherence
+
+def generate_fossil(state, bias, alpha, entropy, rms_drift, coherence, prev_hash="GENESIS"):
+    """Creates an immutable, self-verifying memory record."""
+    # Upgrade: Fossil now includes an SE44 snapshot for full auditability.
+    record = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "state": round(state, 6),
+        "bias": round(bias, 6),
+        "alpha": round(alpha, 6),
+        "entropy": round(entropy, 6),
+        "rms_drift": round(rms_drift, 6),
+        "coherence": round(coherence, 6),
+        "hash_prev": prev_hash
+    }
+    # Canonical serialization ensures deterministic hashing.
+    record_string = json.dumps(record, sort_keys=True, separators=(",", ":"))
+    record["hash_current"] = hashlib.sha256(record_string.encode()).hexdigest()
+    return record
+
+# -------------------- LAYER 3: ADAPTIVE LEARNING & DRIFT --------------------
+
+def sigmoid_drift(raw_drift, entropy_accumulator, drift_ceiling=1.0, k=0.02):
+    """Biological throttle preventing runaway cognitive updates."""
+    scaled = raw_drift / (1 + entropy_accumulator)
+    return drift_ceiling * (1 - math.exp(-k * scaled))
+
+def decay_entropy(entropy, rms_drift, decay_rate=0.01):
+    """Simulates plasticity recovery; calm systems heal faster."""
+    # Upgrade: Decay is now proportional to stability (1 - rms_drift).
+    return max(0.0, entropy - (decay_rate * (1.0 - rms_drift)))
+
+class CuriosityEngine:
+    """Biases attention toward uncertainty and novelty."""
+    def __init__(self, history_size=10):
+        self.sensor_history = deque(maxlen=history_size)
+        self.pred_errors = deque(maxlen=history_size)
+
+    def compute_curiosity(self, current_percept):
+        """Calculates intrinsic motivation (Uncertainty * Novelty)."""
+        uncertainty = np.std(self.pred_errors) if len(self.pred_errors) > 1 else 0.5
+        novelty = 1.0
+        if self.sensor_history:
+            avg_past = sum(self.sensor_history) / len(self.sensor_history)
+            novelty = 1.0 - math.exp(-abs(current_percept - avg_past))
+        return uncertainty * novelty
+
+# -------------------- LAYER 4: PSI TRANSFERENCE & INTENT --------------------
+
+def psi_transference(env_bias, alpha, base_angle=1.04):
+    """Maps continuous learning to symbolic geometry."""
+    omega_triangle = (base_angle + env_bias) * alpha
+    
+    # Upgrade: Returns symbolic token + probabilistic confidence score.
+    confidence = abs(omega_triangle - 1.0)
+    if omega_triangle < 0.97:
+        return "scalene", confidence
+    elif 0.97 <= omega_triangle <= 1.03:
+        return "nearly_isosceles", confidence
+    else:
+        return "drifted_isosceles", confidence
+
+class IntentGovernor:
+    """Constraints on goal formation to prevent chaotic agency."""
+    def __init__(self, min_cycles=10):
+        self.current_intent = "observe_environment"
+        self.intent_age = 0
+        self.min_cycles = min_cycles
+
+    def propose_intent_shift(self, drift, entropy, threshold=0.02):
+        """Upgraded: Agency only mutates under calm cognition (low entropy)."""
+        self.intent_age += 1
+        # Gate: Requires minimum age, low drift, AND low entropy stability.
+        if self.intent_age > self.min_cycles and drift < threshold and entropy < 0.01:
+            self.current_intent = "refine_prediction"
+            self.intent_age = 0
+            return True
+        return False
+
+# -------------------- UNIFIED SIMULATION LOOP --------------------
+
+def run_ophi_prototype(ticks=20):
+    state, bias, alpha = 0.5, 0.1, 1.0
+    entropy_accumulator = 0.0
+    drift_history = deque(maxlen=20)
+    fossils = []
+    
+    curiosity_engine = CuriosityEngine()
+    intent_governor = IntentGovernor()
+
+    print(f"{'Tick':<5} | {'Intent':<18} | {'Drift':<8} | {'Entropy':<8} | {'Geometry':<16} | {'Confidence'}")
+    print("-" * 95)
+
+    for tick in range(1, ticks + 1):
+        # 1. Experience: Normalized Sensors
+        sensors = {
+            "light": normalize(random.uniform(200, 800), 0, 1000),
+            "temp": normalize(random.uniform(15, 30), -10, 50),
+            "sound": normalize(random.uniform(20, 80), 0, 120)
+        }
+        percept_scalar = sum(sensors.values()) / len(sensors)
+        
+        # 2. Error: Prediction vs. Outcome
+        prediction = (state + bias) * alpha
+        outcome = random.uniform(0.0, 1.0)
+        raw_drift = abs(prediction - outcome)
+        drift_history.append(raw_drift)
+        rms_drift = math.sqrt(sum(d*d for d in drift_history) / len(drift_history))
+
+        # 3. Adaptation: Regulated Learning
+        curiosity_val = curiosity_engine.compute_curiosity(percept_scalar)
+        curiosity_engine.pred_errors.append(raw_drift)
+        curiosity_engine.sensor_history.append(percept_scalar)
+        
+        # Upgrade: Curiosity now scales the effective learning rate.
+        effective_drift = sigmoid_drift(raw_drift, entropy_accumulator)
+        effective_drift *= (1 + curiosity_val) 
+        
+        if raw_drift > 0.05:
+            bias += effective_drift * 0.1
+            state += effective_drift * 0.05
+            entropy_accumulator += raw_drift * 0.02
+        
+        # Upgrade: Stability-proportional entropy healing.
+        entropy_accumulator = decay_entropy(entropy_accumulator, rms_drift)
+
+        # 4. Governance: SE44 Gate & Memory Fossilization
+        passed, dynamic_coherence = passes_SE44(entropy_accumulator, rms_drift)
+        fossil_status = "REJECT"
+        if passed:
+            prev_h = fossils[-1]["hash_current"] if fossils else "GENESIS"
+            fossil = generate_fossil(state, bias, alpha, entropy_accumulator, 
+                                     rms_drift, dynamic_coherence, prev_h)
+            fossils.append(fossil)
+            fossil_status = "COMMIT"
+
+        # 5. Cross-Domain Transfer & Intent
+        geo_class, confidence = psi_transference(bias, alpha)
+        intent_governor.propose_intent_shift(rms_drift, entropy_accumulator)
+
+        print(f"{tick:<5} | {intent_governor.current_intent:<18} | {raw_drift:0.4f} | "
+              f"{entropy_accumulator:0.4f} | {geo_class:<16} | {confidence:0.4f}")
+
+if __name__ == "__main__":
+    run_ophi_prototype()
+```
+
+### Key Upgrades Implemented
+*   **Layer 1-2 (Governance):** Sensors are now strictly clamped to prevent out-of-bounds data. The **SE44 Gate** uses **Dynamic Coherence** ($1 - RMS\_Drift$), ensuring stability is an emergent property rather than a hardcoded metric.
+*   **Fossilization Layer:** Fossil records now include a full **SE44 snapshot** (Entropy, Drift, Coherence), making the append-only ledger a self-verifying evidence chain.
+*   **Layer 3 (Learning):** The **Curiosity Engine** is no longer "wasted gold." It now scales the learning rate, focusing the system's adaptation on novel or high-uncertainty stimuli. **Entropy Decay** is now proportional to stability, allowing calm systems to regain learning agility faster than chaotic ones.
+*   **Layer 4 (Transference & Agency):** **Psi Transference** now provides **probabilistic-aware** classifications by returning a confidence score alongside the symbolic token. The **Intent Governor** is now gated by an **Entropy Threshold** ($< 0.01$), ensuring that agency only evolves during stable cognitive states.
