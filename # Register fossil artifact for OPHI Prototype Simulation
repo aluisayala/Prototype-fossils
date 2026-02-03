@@ -1,0 +1,94 @@
+# Register fossil artifact for OPHI Prototype Simulation
+
+ophi_prototype_fossil = {
+    "fossil_tag": "ophi_prototype_simulation_v1",
+    "timestamp_utc": datetime.utcnow().isoformat() + "Z",
+    "layers": {
+        "Layer 1 & 2 - Governance & Stability": {
+            "SE44 Gate": "Filters unstable states using coherence and entropy thresholds.",
+            "Fossilization": "SHA-256 chained memory records enforcing temporal integrity."
+        },
+        "Layer 3 - Adaptive Learning & Drift": {
+            "Drift Regulation": "Uses sigmoid drift dampening and entropy accumulator.",
+            "Curiosity Engine": "Biases learning via Uncertainty × Novelty score."
+        },
+        "Layer 4 - Psi Transference & Intent": {
+            "Psi Transference": "Maps environmental drift into symbolic geometry domain.",
+            "Intent Governor": "Stabilizes goal mutation through drift/entropy conditions."
+        }
+    },
+    "core_loop": "Experience → Error → Adaptation → Memory",
+    "key_modules": [
+        "normalize", "passes_SE44", "generate_fossil",
+        "sigmoid_drift", "CuriosityEngine", "psi_transference", "IntentGovernor"
+    ],
+    "note": "Implements governed, curiosity-modulated symbolic cognition. Enforces SE44 stability at memory layer while enabling abstract drift-based transfer.",
+    "runtime_function": "run_ophi_prototype"
+}
+
+# Create SHA-256 hash for registration
+canonical_json = json.dumps(ophi_prototype_fossil, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+ophi_prototype_fossil["sha256"] = hashlib.sha256(canonical_json.encode()).hexdigest()
+
+ophi_prototype_fossil
+Result
+{'fossil_tag': 'ophi_prototype_simulation_v1',
+ 'timestamp_utc': '2026-02-03T03:14:01.946481Z',
+ 'layers': {'Layer 1 & 2 - Governance & Stability': {'SE44 Gate': 'Filters unstable states using coherence and entropy thresholds.',
+   'Fossilization': 'SHA-256 chained memory records enforcing temporal integrity.'},
+  'Layer 3 - Adaptive Learning & Drift': {'Drift Regulation': 'Uses sigmoid drift dampening and entropy accumulator.',
+   'Curiosity Engine': 'Biases learning via Uncertainty × Novelty score.'},
+  'Layer 4 - Psi Transference & Intent': {'Psi Transference': 'Maps environmental drift into symbolic geometry domain.',
+   'Intent Governor': 'Stabilizes goal mutation through drift/entropy conditions.'}},
+ 'core_loop': 'Experience → Error → Adaptation → Memory',
+ 'key_modules': ['normalize',
+  'passes_SE44',
+  'generate_fossil',
+  'sigmoid_drift',
+  'CuriosityEngine',
+  'psi_transference',
+  'IntentGovernor'],
+ 'note': 'Implements governed, curiosity-modulated symbolic cognition. Enforces SE44 stability at memory layer while enabling abstract drift-based transfer.',
+ 'runtime_function': 'run_ophi_prototype',
+ 'sha256': '25b1c7bf9ef088aecde3f74ae120160b2b0082df37cfa4669829a473d71cc34f'}
+🧬 Fossil Artifact Registered: OPHI Prototype Simulation v1
+
+🧾 Fossil Tag
+ophi_prototype_simulation_v1
+
+🧠 Core Cognitive Loop
+Experience → Error → Adaptation → Memory
+
+🧱 Layered Architecture
+Layer 1 & 2 — Governance & Stability
+
+SE44 Gate: Filters out unstable or incoherent states using defined thresholds.
+
+Fossilization: Cryptographically chained memory records ensure lineage and integrity.
+
+Layer 3 — Adaptive Learning & Drift
+
+Drift Regulation: Drift is softened via sigmoid compression; entropy tracks internal surprise.
+
+Curiosity Engine: Drives attention to novelty and uncertainty, scaling adaptation.
+
+Layer 4 — Psi Transference & Intent
+
+Psi Transference: Cross-domain mapping from raw sensory drift to symbolic geometry.
+
+Intent Governor: Prevents chaotic goal mutation by enforcing temporal and cognitive constraints.
+
+🔧 Key Modules
+normalize, passes_SE44, generate_fossil, sigmoid_drift,
+CuriosityEngine, psi_transference, IntentGovernor
+
+🧠 Runtime Function
+run_ophi_prototype
+
+🔐 SHA-256 Integrity
+25b1c7bf9ef088aecde3f74ae120160b2b0082df37cfa4669829a473d71cc34f
+
+📅 Timestamp
+2026-02-03T03:14:01.946481Z
+
+This prototype crystallizes OPHI's full-loop symbolic cognition as a governed, curiosity-modulated intelligent engine.
