@@ -1,0 +1,98 @@
+python
+import math
+import hashlib
+import time
+
+class OPHIEngine:
+    def __init__(self):
+        # Initial Stable State (The Fossil Ledger Baseline)
+        self.omega = 0.500
+        self.entropy = 0.001
+        self.alpha = 0.999
+        self.intent_age = 15
+        self.fossil_ledger = []
+        
+        # SE44 Thresholds
+        self.SE44_COHERENCE_MIN = 0.985
+        self.SE44_ENTROPY_MAX = 0.01
+        self.SE44_RMS_DRIFT_MAX = 0.001
+
+        # Initial Fossilization
+        self.fossilize("Genesis Block")
+
+    def fossilize(self, metadata="Stable State"):
+        """Etches the current state into the immutable ledger."""
+        prev_hash = self.fossil_ledger[-1]['hash_current'] if self.fossil_ledger else "0" * 64
+        
+        record = f"{self.omega}{self.entropy}{prev_hash}{time.time()}"
+        current_hash = hashlib.sha256(record.encode()).hexdigest()
+        
+        fossil = {
+            "omega": self.omega,
+            "entropy": self.entropy,
+            "alpha": self.alpha,
+            "hash_prev": prev_hash,
+            "hash_current": current_hash,
+            "metadata": metadata
+        }
+        self.fossil_ledger.append(fossil)
+        print(f"✅ [FOSSILIZED]: {metadata} | Hash: {current_hash[:12]}...")
+
+    def process_signal(self, raw_input):
+        print(f"\n--- Processing Signal: {raw_input} ---")
+        
+        # 1. Normalization (simplified)
+        normalized_input = max(0.0, min(1.0, raw_input))
+        
+        # 2. Calculate Perceptual Drift (Delta)
+        delta = abs(normalized_input - self.omega)
+        print(f"Signal Delta: {delta:.4f}")
+
+        # 3. Damping Field (Entropy Accumulation)
+        proposed_entropy = self.entropy + (delta * 1.5)
+        
+        # 4. Omega Mutation (Proposed Flex)
+        # Alpha is dampened by entropy (higher entropy = lower flexibility)
+        effective_alpha = self.alpha * (1.0 - proposed_entropy)
+        proposed_omega = self.omega + (delta * (1.0 - effective_alpha))
+        
+        # 5. Calculate Metrics for SE44 Audit
+        rms_drift = abs(proposed_omega - self.omega)
+        # Coherence is inversely proportional to sudden entropy spikes
+        proposed_coherence = 1.0 - (proposed_entropy * 0.5)
+
+        print(f"Proposed Omega: {proposed_omega:.4f}")
+        print(f"Proposed Entropy: {proposed_entropy:.4f}")
+        print(f"Proposed Coherence: {proposed_coherence:.4f}")
+
+        # 6. SE44 Gate Audit
+        passed_entropy = proposed_entropy <= self.SE44_ENTROPY_MAX
+        passed_drift = rms_drift <= self.SE44_RMS_DRIFT_MAX
+        passed_coherence = proposed_coherence >= self.SE44_COHERENCE_MIN
+
+        if passed_entropy and passed_drift and passed_coherence:
+            self.omega = proposed_omega
+            self.entropy = proposed_entropy
+            self.fossilize("Successful Learning")
+        else:
+            print("❌ [SE44 REJECTION]: Stability Violation Detected.")
+            self.rollback()
+
+    def rollback(self):
+        """Reverts the system to the last known stable fossil."""
+        last_stable = self.fossil_ledger[-1]
+        print(f"🔄 [ROLLBACK]: Reverting to Omega {last_stable['omega']}...")
+        self.omega = last_stable['omega']
+        self.entropy = last_stable['entropy']
+        print("System Identity Restored.")
+
+# --- THE RUN ---
+
+ophi = OPHIEngine()
+
+# Scenario A: A "Calm" Thought (Should Pass)
+ophi.process_signal(0.501) 
+
+# Scenario B: The "Toxic Drift" (The Failure Scenario)
+# An input of 0.850 represents a 35% shift from the mean
+ophi.process_signal(0.850) 
