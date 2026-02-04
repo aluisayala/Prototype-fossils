@@ -1,0 +1,375 @@
+import math
+
+import hashlib
+
+import json
+
+import numpy as np
+
+
+
+from datetime import datetime
+
+from collections import deque
+
+from dataclasses import dataclass
+
+
+
+# ==========================
+
+# SE44 GOVERNANCE CONSTANTS
+
+# ==========================
+
+
+
+SE44_COHERENCE_MIN = 0.985
+
+SE44_ENTROPY_MAX = 0.01
+
+SE44_RMS_DRIFT_MAX = 0.001
+
+
+
+INTENT_AGE_THRESHOLD = 10
+
+
+
+
+
+# ==========================
+
+# OMEGA STATE STRUCTURE
+
+# ==========================
+
+
+
+@dataclass(frozen=True)
+
+class Omega:
+
+    state: np.ndarray
+
+    bias: float
+
+    log_alpha: float
+
+    count: int = 1
+
+
+
+
+
+# ==========================
+
+# OPHI GOVERNED CORE
+
+# ==========================
+
+
+
+class OPHIGovernedCore:
+
+
+
+    def __init__(self, init_state: float = 0.5):
+
+        self.omega = Omega(
+
+            state=np.array([init_state]),
+
+            bias=0.1,
+
+            log_alpha=0.0
+
+        )
+
+
+
+        self.last_stable_omega = self.omega
+
+
+
+        self.entropy_acc = 0.0
+
+        self.drift_history = deque(maxlen=30)
+
+
+
+        self.ledger = []
+
+        self.last_hash = "GENESIS"
+
+
+
+        self.intent = "observe_environment"
+
+        self.intent_age = 0
+
+
+
+        print("OPHI Core Initialized")
+
+
+
+    # ==========================
+
+    # CORE DYNAMICS
+
+    # ==========================
+
+
+
+    def calculate_prediction(self):
+
+        return (self.omega.state + self.omega.bias) * math.exp(self.omega.log_alpha)
+
+
+
+    def apply_environment_step(self):
+
+        noise = np.random.normal(0, 0.0004)
+
+        new_state = self.omega.state + noise
+
+
+
+        self.omega = Omega(
+
+            state=new_state,
+
+            bias=self.omega.bias,
+
+            log_alpha=self.omega.log_alpha,
+
+            count=self.omega.count + 1
+
+        )
+
+
+
+        self.entropy_acc += abs(noise)
+
+
+
+        return noise
+
+
+
+    # ==========================
+
+    # DRIFT + SE44 GATE
+
+    # ==========================
+
+
+
+    def compute_rms_drift(self):
+
+        delta = self.omega.state - self.last_stable_omega.state
+
+        rms = float(np.sqrt(np.mean(delta ** 2)))
+
+        self.drift_history.append(rms)
+
+        return rms
+
+
+
+    def se44_gate(self, rms_drift):
+
+
+
+        coherence = max(0.0, 1.0 - rms_drift)
+
+
+
+        passed = (
+
+            coherence >= SE44_COHERENCE_MIN and
+
+            self.entropy_acc <= SE44_ENTROPY_MAX and
+
+            rms_drift <= SE44_RMS_DRIFT_MAX
+
+        )
+
+
+
+        return passed, coherence
+
+
+
+    # ==========================
+
+    # FOSSILIZATION
+
+    # ==========================
+
+
+
+    def fossilize(self, coherence, rms_drift):
+
+
+
+        timestamp = (
+
+            datetime.utcnow()
+
+            .replace(microsecond=0)
+
+            .isoformat() + "Z"
+
+        )
+
+
+
+        record = {
+
+            "timestamp": timestamp,
+
+            "state": self.omega.state.tolist(),
+
+            "bias": self.omega.bias,
+
+            "alpha": math.exp(self.omega.log_alpha),
+
+            "entropy": round(self.entropy_acc, 8),
+
+            "rms_drift": round(rms_drift, 8),
+
+            "coherence": round(coherence, 8),
+
+            "intent": self.intent,
+
+            "hash_prev": self.last_hash
+
+        }
+
+
+
+        payload = json.dumps(record, sort_keys=True).encode()
+
+        current_hash = hashlib.sha256(payload).hexdigest()
+
+
+
+        record["hash_current"] = current_hash
+
+
+
+        self.last_hash = current_hash
+
+        self.ledger.append(record)
+
+
+
+        self.last_stable_omega = self.omega
+
+        self.entropy_acc = 0.0
+
+
+
+        print("FOSSIL CREATED:", current_hash[:16], "...")
+
+
+
+        return current_hash
+
+
+
+    # ==========================
+
+    # TICK LOOP
+
+    # ==========================
+
+
+
+    def tick(self):
+
+
+
+        noise = self.apply_environment_step()
+
+        rms_drift = self.compute_rms_drift()
+
+
+
+        passed, coherence = self.se44_gate(rms_drift)
+
+
+
+        print(
+
+            f"TICK {self.omega.count:03d} | "
+
+            f"Noise={noise:+.6f} | "
+
+            f"Drift={rms_drift:.6f} | "
+
+            f"Entropy={self.entropy_acc:.6f} | "
+
+            f"Coherence={coherence:.6f} | "
+
+            f"PASS={passed}"
+
+        )
+
+
+
+        if passed:
+
+            self.fossilize(coherence, rms_drift)
+
+
+
+        self.intent_age += 1
+
+
+
+
+
+# ==========================
+
+# MAIN EXECUTION LOOP
+
+# ==========================
+
+
+
+if __name__ == "__main__":
+
+
+
+    core = OPHIGovernedCore(init_state=0.5)
+
+
+
+    STEPS = 25
+
+
+
+    print("\n--- OPHI LIVE EXECUTION START ---\n")
+
+
+
+    for _ in range(STEPS):
+
+        core.tick()
+
+
+
+    print("\n--- EXECUTION COMPLETE ---")
+
+    print("Total Fossils:", len(core.ledger))
+
+
+
+    print("\nLast Fossil Snapshot:")
+
+    if core.ledger:
+
+        print(json.dumps(core.ledger[-1], indent=2))
