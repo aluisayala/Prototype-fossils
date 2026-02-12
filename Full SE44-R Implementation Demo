@@ -1,0 +1,243 @@
+# Full SE44-R Implementation Demo
+# - LQR baseline stabilizer
+# - Discrete Lyapunov certificate
+# - Ω injection with adaptive rho
+# - 3-mode SE44-R (GREEN / AMBER / RED)
+# - Simple barrier projection (ellipsoidal safe set)
+# - Plots (one figure per chart, no custom colors)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import solve_discrete_are, solve_discrete_lyapunov
+
+rng = np.random.default_rng(2)
+
+# ----------------------
+# Plant
+# ----------------------
+A = np.array([[1.02, 0.05],
+              [0.00, 0.98]])
+B = np.array([[0.10],
+              [0.08]])
+
+n = A.shape[0]
+
+# ----------------------
+# LQR Design
+# ----------------------
+Q = np.eye(n)
+R = np.array([[0.5]])
+
+P_lqr = solve_discrete_are(A, B, Q, R)
+K = np.linalg.inv(B.T @ P_lqr @ B + R) @ (B.T @ P_lqr @ A)
+
+# Closed-loop matrix
+Acl = A - B @ K
+
+# Lyapunov certificate for baseline closed loop
+Q_lyap = np.eye(n)
+P = solve_discrete_lyapunov(Acl.T, Q_lyap)
+
+# Safe ellipsoid size
+c_safe = 4.0
+
+# ----------------------
+# SE44-R thresholds
+# ----------------------
+Cmin_strict, Smax_strict, RMSmax_strict = 0.985, 0.01, 0.001
+Cmin_relaxed, Smax_relaxed, RMSmax_relaxed = 0.97, 0.05, 0.005
+
+DX_cert = 0.1
+W = 30
+
+# ----------------------
+# Barrier projection
+# ----------------------
+def barrier_project(u_cand, x):
+    x_next = A @ x + B * u_cand
+    V_next = float(x_next.T @ P @ x_next)
+    if V_next <= c_safe:
+        return u_cand
+    # simple line search scaling
+    scale = 1.0
+    for _ in range(20):
+        scale *= 0.7
+        u_test = scale * u_cand
+        x_test = A @ x + B * u_test
+        if float(x_test.T @ P @ x_test) <= c_safe:
+            return u_test
+    return 0.0
+
+# ----------------------
+# Metrics
+# ----------------------
+def coherence(x):
+    V = float(x.T @ P @ x)
+    return max(0.0, min(1.0, 1 - V / c_safe))
+
+def entropy(dx):
+    return min(1.0, np.linalg.norm(dx) / DX_cert)
+
+def rms_drift(hist):
+    if len(hist) == 0:
+        return 0.0
+    arr = np.array(hist)
+    return float(np.sqrt(np.mean(arr**2)))
+
+# ----------------------
+# Simulation
+# ----------------------
+T = 800
+x = np.array([[0.6],
+              [-0.4]])
+
+rho = 1.0
+alpha = 0.3
+alpha_max = 0.6
+alpha_min = 0.0
+beta = 0.05
+dhat = 0.0
+
+mode = "GREEN"
+recover_count = 0
+AMBER_MAX = 60
+
+dx_hist = []
+
+Xs = np.zeros((T, 2))
+Vs = np.zeros(T)
+Us = np.zeros(T)
+Rhos = np.zeros(T)
+Modes = []
+Cs = np.zeros(T)
+Ss = np.zeros(T)
+RMSs = np.zeros(T)
+
+for k in range(T):
+
+    y = float(x[0,0])
+    dhat = (1-beta)*dhat + beta*y
+    Omega = alpha * (y + dhat)
+
+    u_base = float(-K @ x)
+    u_cand = u_base + rho * Omega
+
+    # disturbance
+    w = rng.normal(0.0, 0.01, size=(2,1))
+    if rng.random() < 0.02:
+        w += rng.normal(0.0, 0.2, size=(2,1))
+
+    x_pred = A @ x + B * u_cand + w
+    dx = x_pred - x
+
+    dxn = np.linalg.norm(dx) / DX_cert
+    dx_hist.append(dxn)
+    if len(dx_hist) > W:
+        dx_hist.pop(0)
+
+    Ck = coherence(x)
+    Sk = entropy(dx)
+    RMSk = rms_drift(dx_hist) * 1e-3
+
+    # --- Mode transitions ---
+    if mode == "GREEN":
+        if (Ck < Cmin_strict) or (Sk > Smax_strict) or (RMSk > RMSmax_strict):
+            mode = "AMBER"
+            recover_count = 0
+
+    elif mode == "AMBER":
+        if float(x.T @ P @ x) > c_safe:
+            mode = "RED"
+        elif (Ck >= Cmin_relaxed) and (Sk <= Smax_relaxed) and (RMSk <= RMSmax_relaxed):
+            recover_count += 1
+            if recover_count > 20:
+                mode = "GREEN"
+        else:
+            recover_count = 0
+
+    elif mode == "RED":
+        if (Ck >= Cmin_relaxed):
+            recover_count += 1
+            if recover_count > 30:
+                mode = "AMBER"
+        else:
+            recover_count = 0
+
+    # --- rho policy ---
+    if mode == "GREEN":
+        rho = min(1.0, rho + 0.01)
+    elif mode == "AMBER":
+        rho = max(0.2, rho - 0.05)
+    else:
+        rho = 0.0
+
+    # --- Control application ---
+    if mode == "RED":
+        u = u_base
+    else:
+        u = barrier_project(u_cand, x)
+
+    x = A @ x + B * u + w
+
+    # adapt alpha only in GREEN
+    if mode == "GREEN":
+        alpha = min(alpha_max, alpha + 0.002)
+    else:
+        alpha = max(alpha_min, alpha - 0.01)
+
+    # logs
+    Xs[k] = x.ravel()
+    Vs[k] = float(x.T @ P @ x)
+    Us[k] = u
+    Rhos[k] = rho
+    Modes.append(mode)
+    Cs[k] = Ck
+    Ss[k] = Sk
+    RMSs[k] = RMSk
+
+# ----------------------
+# Plots (one per figure)
+# ----------------------
+
+plt.figure()
+plt.plot(Xs[:,0])
+plt.plot(Xs[:,1])
+plt.title("State trajectory")
+plt.xlabel("k")
+plt.ylabel("x")
+plt.show()
+
+plt.figure()
+plt.plot(Vs)
+plt.title("Lyapunov V(x)")
+plt.xlabel("k")
+plt.ylabel("V")
+plt.show()
+
+plt.figure()
+plt.plot(Us)
+plt.title("Control input")
+plt.xlabel("k")
+plt.ylabel("u")
+plt.show()
+
+plt.figure()
+plt.plot(Rhos)
+plt.title("Omega injection weight rho")
+plt.xlabel("k")
+plt.ylabel("rho")
+plt.show()
+
+plt.figure()
+plt.plot(Cs)
+plt.plot(Ss)
+plt.plot(RMSs)
+plt.title("SE44 metrics")
+plt.xlabel("k")
+plt.ylabel("metric")
+plt.show()
+
+unique_modes = set(Modes)
+print("Modes encountered:", unique_modes)
+print("Max V(x):", np.max(Vs))
+print("Final state norm:", np.linalg.norm(Xs[-1]))
