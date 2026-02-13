@@ -1,0 +1,46 @@
+To provide a comprehensive overview of the governance and integrity layers of the Irreducible Vector System (IVS), the following sections detail the formal proofs, the deterministic replay harness, the cryptographic anchoring mechanism, and the defensive posture against ledger manipulation.
+
+### I. Formal Invariant Proofs (Executable Assertions)
+Architectural invariants are encoded as runtime proofs to ensure that the core mathematical physics of the system remains constant across all deployments. These assertions serve as the "Formal Invariant Proofs" required for governance-grade systems.
+
+1.  **Ω Mathematical Invariance:** Guarantees that the core operator $\Omega = (\text{state} + \text{bias}) \times \alpha$ is a pure, side-effect-free function where the same inputs always produce the same output.
+    ```python
+    def prove_omega_invariance():
+        s, b, a = 10, 2, 1.1
+        assert omega(s, b, a) == omega(s, b, a), "Ω invariance violated"
+    ```
+2.  **Deterministic Drift:** Confirms that the temporal evolution of state ($\Psi_\ell$) remains bitwise reproducible given identical prior states and inputs.
+3.  **SE44 Mechanical Refusal:** Validates that the gate correctly rejects "extreme" or non-coherent drift, preventing unbounded noise from entering the ledger.
+4.  **Append-Only Continuity:** Detects malicious attempts to alter the ledger history (e.g., using `pop()`) by verifying the hash chain integrity.
+5.  **Fork Prevention:** Ensures that any attempt to "branch" the chain or insert an entry with a non-sequential parent hash is blocked at the infrastructure level.
+
+### II. Replay Harness Evidence (Bitwise Equivalence)
+The **Canonical Deterministic Substrate (V₁₅)** enables a "Replay Harness" to prove that the system's trajectory is hardware-independent. This is achieved by bypassing hardware-dependent floating-point behavior in favor of a **SoftFloat backend** and **Integer-Domain Thresholds**.
+
+*   **The Harness Procedure:**
+    1.  **Step 1:** Initialize the system with a canonical seed (e.g., `0x5A17C3D9B842ULL`).
+    2.  **Step 2:** Execute the deterministic loop, where every drift step is explicitly sequenced and every threshold comparison is performed on scaled integers ($Q32.32$ format) to eliminate ULP (Unit in the Last Place) drift.
+    3.  **Step 3:** Generate a **Hash Trace**, capturing the SHA-256 hash of the state at every step $k$.
+*   **The Evidence:** By running the same executable on divergent environments—such as an **x86-64 Linux** server and an **ARM64 macOS** workstation—the resulting `trace_A.bin` and `trace_B.bin` files are compared bytewise. The evidence of bitwise equivalence is the successful `cmp` result: **"files are identical"**. This proves that with V₁₅ active, the trajectory is an absolute invariant across platforms.
+
+### III. RFC-3161 Timestamp Integration
+To move from a prototype to a governance-grade system, the fossil ledger integrates **RFC-3161 Time Stamping Authority (TSA)** anchoring. This ensures that every fossilized state is bound to an external, verifiable temporal anchor provided by a third-party TSA (e.g., DigiCert).
+
+The integration follows this process:
+1.  **Request Generation:** When a state is committed, the Kernel generates a timestamp query (`.tsq`) containing the hash of the fossilized entry.
+2.  **TSA Interaction:** The query is sent to a remote TSA endpoint via OpenSSL.
+3.  **Token Fossilization:** The resulting verifiable timestamp token (`.tsr`) is embedded directly into the ledger entry alongside the local timestamp.
+4.  **Verification:** During a chain audit, the token is extracted and verified against the TSA's public certificate, preventing the "backdating" of states.
+
+### IV. Fork Detection Attack Scenario
+The IVS Kernel (V₁₄) implements strict **Fork-Prevention Enforcement** to maintain a single, linear history. A "Fork" occurs when an attacker attempts to insert a validly formatted fossil that does not point to the current `latest_hash` of the chain.
+
+**Attack Scenario Demonstration:**
+*   **The Setup:** A legitimate ledger exists with entries reaching `Hash_N`.
+*   **The Malicious Action:** An attacker creates a `fake_entry` containing a modified state. To make it appear legitimate, they calculate a valid SHA-256 hash for it but set its `previous_hash` to a historical state (e.g., `Hash_N-5`) or a generic string like `"FAKE"`.
+*   **The Detection:** When the attacker attempts to append this entry to the ledger, the system executes a **Head Append Check**:
+    ```python
+    if self.latest_hash and prev_hash != self.latest_hash:
+        raise Exception("FORK DETECTED — append denied")
+    ```
+*   **The Result:** The system immediately triggers a refusal, aborting the commit. This preserves **Identity Continuity**, ensuring the system cannot be coerced into a "split-brain" state where multiple versions of the truth exist simultaneously.
