@@ -1,0 +1,106 @@
+# UNIVERSAL CHOKE CONTROL — ADVANCED MODEL
+# Added:
+# 1. Formal Barrier Projection (Control Barrier Function enforcement)
+# 2. Multi-node Network Coupling
+# 3. Monte Carlo Near-Miss Calibration Engine
+
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+np.random.seed(7)
+
+# --- Parameters ---
+N_nodes = 5
+T = 300
+dt = 0.1
+time = np.arange(0, T * dt, dt)
+epsilon = 1e-6
+MC_runs = 200
+
+# --- Network Coupling Matrix (weighted adjacency) ---
+A = np.array([
+    [0.0, 0.2, 0.1, 0.0, 0.0],
+    [0.2, 0.0, 0.15, 0.1, 0.0],
+    [0.1, 0.15, 0.0, 0.2, 0.1],
+    [0.0, 0.1, 0.2, 0.0, 0.25],
+    [0.0, 0.0, 0.1, 0.25, 0.0]
+])
+
+# --- Base Stress Dynamics per Node ---
+def generate_node_stress(base_shift):
+    return 0.4 + base_shift + 0.003*time + 0.05*np.sin(0.15*time)
+
+# --- Barrier Projection Function ---
+# Control Barrier Function h(X) = 1 - X  → enforce h(X) ≥ 0
+def barrier_projection(X):
+    return np.minimum(X, 0.999)  # hard safety projection
+
+# --- Simulation Core ---
+node_X = np.zeros((N_nodes, len(time)))
+
+for i in range(N_nodes):
+    stress = generate_node_stress(0.05*i)
+    acceleration = np.gradient(stress, dt)
+    latency = 0.3 + 0.04*np.sin(0.05*time)
+    S_dot = 0.5*stress + 0.3*np.abs(acceleration) + 0.2*latency
+    
+    headroom = 1.4 - 0.002*time
+    control = 0.7 + 0.05*np.cos(0.1*time)
+    redundancy = 0.5
+    D = headroom + control + redundancy
+    
+    X = S_dot / (D + epsilon)
+    node_X[i] = X
+
+# --- Network Coupling ---
+for t in range(1, len(time)):
+    coupling_effect = A @ node_X[:, t-1]
+    node_X[:, t] += 0.1 * coupling_effect
+
+# --- Barrier Enforcement ---
+node_X = barrier_projection(node_X)
+
+# --- Plot 1: Node 0 Choke Index ---
+plt.figure()
+plt.plot(time, node_X[0])
+plt.axhline(1.0)
+plt.xlabel("Time")
+plt.ylabel("Node 0 Choke Index")
+plt.title("Barrier-Projected Choke Index (Node 0)")
+plt.show()
+
+# --- Monte Carlo Near-Miss Engine ---
+near_miss_counts = 0
+
+for run in range(MC_runs):
+    noise = np.random.normal(0, 0.02, size=len(time))
+    stress = 0.5 + 0.003*time + noise
+    acceleration = np.gradient(stress, dt)
+    latency = 0.3
+    S_dot = 0.5*stress + 0.3*np.abs(acceleration) + 0.2*latency
+    D = 1.8 - 0.001*time
+    
+    X = S_dot / (D + epsilon)
+    
+    # Near-miss condition: 0.9 ≤ X < 1.0
+    if np.any((X >= 0.9) & (X < 1.0)):
+        near_miss_counts += 1
+
+near_miss_probability = near_miss_counts / MC_runs
+
+# --- Plot 2: Monte Carlo Distribution Example Run ---
+plt.figure()
+plt.plot(time, X)
+plt.axhline(0.9)
+plt.axhline(1.0)
+plt.xlabel("Time")
+plt.ylabel("Sample Monte Carlo Choke Index")
+plt.title("Near-Miss Region Visualization")
+plt.show()
+
+print("ADVANCED MODEL SUMMARY")
+print("----------------------")
+print("Nodes:", N_nodes)
+print("Monte Carlo Runs:", MC_runs)
+print("Near-Miss Probability:", round(float(near_miss_probability),4))
