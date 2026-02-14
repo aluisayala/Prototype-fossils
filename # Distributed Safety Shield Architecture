@@ -1,0 +1,295 @@
+---
+
+# Distributed Safety Shield Architecture
+
+## Source Specification — Cascade Prevention via Local Forward Invariance
+
+**Status:** Normative Source Document
+**Category:** Distributed Control / Infrastructure Resilience
+**Scope:** AI Compute Clusters, Power Grids, Logistics Networks, Financial Venues
+
+---
+
+## 1. Objective
+
+Distributed Safety Shields (DSS) prevent cascading failures by enforcing **local forward invariance** at each node while accounting for bounded disturbances and network coupling.
+
+Instability arises when entropy production (stress accumulation) exceeds dissipation capacity. The architecture guarantees that each node remains within a mathematically defined safe set, even under bounded neighbor influence.
+
+---
+
+## 2. Node Model
+
+Each node ( i ) evolves in discrete time:
+
+[
+x_{k+1} = f(x_k) + g(x_k) u_k + w_k + c_k
+]
+
+Where:
+
+* ( x_k ) = local stress state
+* ( u_k ) = local control input
+* ( w_k ) = bounded disturbance, ( |w_k| \le \bar{w} )
+* ( c_k ) = bounded coupling injection from neighbors
+
+---
+
+## 3. Choke Index and Safe Set
+
+### 3.1 Choke Index
+
+[
+\chi_i = \frac{\dot{S}_i}{D_i + \epsilon}
+]
+
+Where:
+
+**Entropy Production**
+
+[
+\dot{S}*i =
+a_1[x_i]*+ +
+a_2[\dot{x}*i]*+ +
+a_3[L_i]_+ +
+a_4[\sigma_i]
+]
+
+**Dissipation Capacity**
+
+[
+D_i =
+d_1[\text{headroom}*i] +
+d_2[u*{\text{avail},i}] +
+d_3[R_i]
+]
+
+---
+
+### 3.2 Safe Set
+
+[
+h_i(x) = 1 - \chi_i(x)
+]
+
+Safe set:
+
+[
+\mathcal{C}_i = { x : h_i(x) \ge 0 }
+]
+
+Safety condition:
+
+[
+\chi_i \le 1
+]
+
+---
+
+## 4. Forward Invariance Guarantee
+
+The Safety Shield enforces:
+
+[
+h_i(x_{k+1}) \ge (1 - \eta) h_i(x_k) + \rho(x_k)
+]
+
+Where:
+
+* ( \eta \in (0,1) ) = approach-rate parameter
+* ( \rho(x_k) ) = robustness margin
+
+If:
+
+* Disturbances are bounded
+* Coupling injections are bounded
+* Actuator limits are sufficient
+
+Then:
+
+[
+x_k \in \mathcal{C}*i \Rightarrow x*{k+1} \in \mathcal{C}_i
+]
+
+---
+
+## 5. Robustness Margin
+
+Robustness margin accounts for worst-case uncertainty:
+
+[
+\rho(x_k) =
+\Delta_{\text{disturbance}} +
+\Delta_{\text{measurement}} +
+\Delta_{\text{coupling}}
+]
+
+Coupling injection bound:
+
+[
+\Delta_{\text{coupling},i}
+\le
+\sum_j A_{ij} \bar{\gamma}_j
+]
+
+Where:
+
+* ( A_{ij} ) = adjacency matrix
+* ( \bar{\gamma}_j ) = max neighbor stress injection per tick
+
+---
+
+## 6. QP-Based Shield
+
+At each tick, the shield solves:
+
+[
+\min_u |u - u_{\text{nom}}|^2
+]
+
+Subject to:
+
+[
+h_i(x_{k+1}) \ge (1 - \eta) h_i(x_k) + \rho(x_k)
+]
+
+The shield modifies nominal control only when safety boundaries are approached.
+
+---
+
+## 7. Single-Actuator Closed-Form Case
+
+If:
+
+* Dynamics are affine in ( u )
+* Barrier constraint is linear in ( u )
+
+Then:
+
+[
+u^* =
+\text{Proj}*{[u*{\min},u_{\max}]}
+\left(
+u_{\text{nom}} +
+\frac{h_{\text{req}} - \dot{h}_{\text{nom}}}
+{ \frac{\partial h}{\partial u} }
+\right)
+]
+
+Where:
+
+[
+h_{\text{req}} = -\eta h_k + \rho
+]
+
+Actuator saturation and slew limits must be enforced.
+
+If ( \partial h / \partial u \approx 0 ), escalation protocol triggers.
+
+---
+
+## 8. Predictive Echo-Risk Metric
+
+Echo-risk provides early cascade detection:
+
+[
+\rho_i =
+\chi_i +
+\lambda_1 \frac{d\chi_i}{dt} +
+\lambda_2 \text{Corr}(\chi_i, \chi_{\text{neighbors}}) +
+\lambda_3 \Delta L_i
+]
+
+Where:
+
+* ( d\chi_i/dt ) = acceleration toward boundary
+* Corr = short-horizon correlation across adjacency
+* ( \Delta L_i ) = latency inflation
+
+Echo-risk enables preemptive throttling before barrier activation.
+
+---
+
+## 9. Shared Constraint Coordination
+
+For global resource constraints:
+
+[
+\sum_i u_i \le U_{\text{total}}
+]
+
+Nodes solve distributed optimization via:
+
+* ADMM
+* Primal-dual decomposition
+
+Local invariance preserved while satisfying global limits.
+
+---
+
+## 10. Infeasible Safety Escalation
+
+If barrier constraint cannot be satisfied:
+
+1. Minimal intervention projection
+2. Domain emergency mode
+3. Hard shed / isolation
+4. Audit emission
+
+Audit event includes:
+
+* Node ID
+* State snapshot
+* Control action
+* Safety margin
+* Escalation tier
+
+---
+
+## 11. Cross-Domain Mapping
+
+| Domain     | Node               | Stress (x)               | Control (u)              |
+| ---------- | ------------------ | ------------------------ | ------------------------ |
+| AI Cluster | Rack               | GPU hotspot / inlet temp | DVFS / power cap         |
+| Power Grid | Line / Transformer | % thermal rating         | Redispatch / load shed   |
+| Logistics  | Yard block         | Queue length             | Equipment allocation     |
+| Finance    | Venue / Instrument | Order-book thinness      | Margin add-on / throttle |
+
+---
+
+## 12. Deterministic Runtime Requirements
+
+To prevent desynchronization:
+
+* IEEE 754 float64
+* FMA disabled
+* Round-to-nearest-even
+* Fixed tick interval
+* Deterministic timestamp alignment
+* Lexicographically sorted JSON serialization
+* 17-digit decimal precision
+* SHA-256 state anchoring
+
+Optional:
+
+* Fixed-point arithmetic pipelines
+* Integer-domain entropy computation
+
+---
+
+## 13. System-Level Guarantee
+
+Given:
+
+* Bounded disturbance
+* Bounded neighbor injection
+* Deterministic computation
+* Feasible actuator authority
+
+Distributed Safety Shields prevent cascade propagation by ensuring that no node can transition from safe to unsafe in a single update step.
+
+---
+
+**End of Source Specification**
+
+---
