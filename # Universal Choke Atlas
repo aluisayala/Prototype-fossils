@@ -1,0 +1,267 @@
+# Universal Choke Atlas
+
+## A Cross-Domain Instability Topology Framework
+
+**Artifact Class:** Multi-Sector Rate-Imbalance Model
+**Objective:** Formalize choke points as invariant structural patterns across infrastructure domains
+**Scope:** Thermal, Electrical, Logistical, Financial, and Urban Systems
+
+---
+
+# 1. Governing Invariant
+
+Across dense infrastructure systems, instability emerges when the rate of disorder accumulation exceeds available dissipation capacity.
+
+The governing equation is:
+
+[
+\chi_i(t) = \frac{\dot{S}_i(t)}{D_i(t) + \varepsilon}
+]
+
+Where:
+
+* ( \dot{S}_i(t) ) = entropy production rate (stress injection rate)
+* ( D_i(t) ) = dissipation capacity (correction bandwidth)
+* ( \varepsilon ) = small stabilizing constant
+
+Choke onset occurs when:
+
+[
+\chi_i \ge 1
+]
+
+This boundary defines the transition from stable to runaway dynamics.
+
+---
+
+# 2. Structural Grammar of Instability
+
+All sectors instantiate the same structural topology:
+
+```
+Accumulation → Latency → Volatility
+        ÷
+Margin → Actuation → Redundancy
+```
+
+Instability is not material-specific.
+It is bandwidth-specific.
+
+---
+
+# 3. Domain Instantiations
+
+## 3.1 AI Compute Clusters
+
+**Choke Geometry:**
+Energy density vs cooling flux.
+
+**State Variables**
+
+* Stored stress → hotspot temperature
+* Stress rate → thermal ramp rate
+* Dissipation → cooling flux
+
+**Collapse Condition**
+
+[
+\dot{Q}*{injected} > \dot{Q}*{removed}
+]
+
+Result: thermal throttling and compute throughput collapse.
+
+---
+
+## 3.2 Electrical Power Grids
+
+**Choke Geometry:**
+Current concentration vs thermal rating.
+
+**State Variables**
+
+* Line loading ratio
+* Reactive power support
+* N-1 margin
+
+**Cascade Condition**
+
+Local overload triggers topology redistribution:
+
+[
+\chi_i > 1 \Rightarrow \chi_j \uparrow
+]
+
+Failure propagates across the network graph.
+
+---
+
+## 3.3 Supply Chain Nodes
+
+**Choke Geometry:**
+Arrival rate vs service rate.
+
+[
+\lambda > \mu
+]
+
+**State Variables**
+
+* Queue length
+* Dwell time derivative
+* Service throughput
+
+**Failure Mode**
+
+Nonlinear queue growth → inventory crystallization.
+
+---
+
+## 3.4 Financial Markets
+
+**Choke Geometry:**
+Order imbalance vs liquidity refill rate.
+
+**State Variables**
+
+* Spread widening
+* Margin usage
+* Liquidity replenishment speed
+
+**Flash Event Condition**
+
+Volatility acceleration exceeds capital buffer absorption.
+
+Liquidity evaporates faster than it replenishes.
+
+---
+
+## 3.5 Urban Thermal Systems
+
+**Choke Geometry:**
+Solar absorption vs ecological dissipation.
+
+**State Variables**
+
+* Heat retention
+* Vegetation deficit
+* Radiative cooling bandwidth
+
+**Failure Mode**
+
+Nighttime cooling insufficient to offset daytime accumulation → persistent heat basin.
+
+---
+
+# 4. Cross-Domain Invariant
+
+Across all domains:
+
+[
+\chi > 1 \Rightarrow \text{Positive feedback dominates}
+]
+
+Choke points share three properties:
+
+1. High flow concentration
+2. Finite correction bandwidth
+3. Nonlinear redistribution under overload
+
+Collapse is therefore a phase transition triggered by ratio imbalance.
+
+---
+
+# 5. Detector Kernel (Operational Form)
+
+For each node:
+
+```
+s_dot = weighted stress accumulation
+D     = weighted dissipation bandwidth
+chi   = s_dot / (D + epsilon)
+```
+
+Thresholds:
+
+* Green: χ < 0.7
+* Amber: 0.7 ≤ χ < 1.0
+* Red: χ ≥ 1.0
+
+This defines operational boundaries for intervention.
+
+---
+
+# 6. Forward Invariance Condition
+
+Define safe set:
+
+[
+h(x) = 1 - \chi(x) \ge 0
+]
+
+Discrete-time barrier constraint:
+
+[
+h(x_{k+1}) \ge (1 - \eta) h(x_k)
+]
+
+This ensures system state remains forward-invariant under control action.
+
+Energy density cannot scale faster than dissipation bandwidth.
+
+---
+
+# 7. Network Propagation Model
+
+In graph-coupled systems:
+
+[
+\chi_i(t+1) = f\left(\chi_i(t), \sum_j w_{ij} \chi_j(t)\right)
+]
+
+If overload at node ( i ) redistributes stress to neighbors:
+
+[
+\chi_i > 1 \Rightarrow \dot{S}_j \uparrow \Rightarrow \chi_j \uparrow
+]
+
+Cascade occurs when spectral amplification exceeds damping.
+
+---
+
+# 8. Ω Synthesis
+
+Define net coherence flow:
+
+[
+\Omega_i = D_i - \dot{S}_i
+]
+
+Then:
+
+* Ω > 0 → stable regime
+* Ω = 0 → critical surface
+* Ω < 0 → runaway regime
+
+The Choke Index is a normalized detector of the Ω sign.
+
+---
+
+# 9. Structural Conclusion
+
+Choke points are density singularities created when injection bandwidth scales faster than correction bandwidth.
+
+Stability is not achieved by eliminating entropy.
+
+Stability requires ensuring dissipation capacity scales at least proportionally to injection rate.
+
+This principle applies to:
+
+* Thermal compute systems
+* Electrical transmission networks
+* Logistics throughput systems
+* Financial liquidity systems
+* Urban thermal ecosystems
+
+The Universal Choke Equation therefore functions as a domain-agnostic instability detector rooted in rate imbalance and finite correction bandwidth.
+
+End of Source Document.
