@@ -1,0 +1,228 @@
+# UNIVERSAL CHOKE CONTROL — FULL MULTI-LAYER SIMULATION
+
+# Features Added:
+
+# 1. Cascade detection logic
+
+# 2. Forced choke stress test event
+
+# 3. Predictive echo metric ρ(t)
+
+# 4. Adaptive control (auto-throttle near X → 1.0)
+
+# 5. Multi-sector model (thermal + liquidity + compute)
+
+# 6. CSV export
+
+
+
+import numpy as np
+
+import pandas as pd
+
+import matplotlib.pyplot as plt
+
+
+
+np.random.seed(1)
+
+
+
+T = 400
+
+dt = 0.1
+
+time = np.arange(0, T * dt, dt)
+
+epsilon = 1e-6
+
+
+
+# --- Multi-Sector Stress Generation ---
+
+thermal_stress = 0.4 + 0.002*time + 0.05*np.sin(0.15*time)
+
+liquidity_stress = 0.5 + 0.003*time + 0.04*np.sin(0.1*time)
+
+compute_stress = 0.3 + 0.0025*time + 0.03*np.sin(0.2*time)
+
+
+
+# Force choke event spike
+
+spike_index = 250
+
+thermal_stress[spike_index:spike_index+20] += 0.8
+
+liquidity_stress[spike_index:spike_index+20] += 0.7
+
+compute_stress[spike_index:spike_index+20] += 0.6
+
+
+
+# Combine sector stress
+
+stress = (thermal_stress + liquidity_stress + compute_stress) / 3
+
+acceleration = np.gradient(stress, dt)
+
+latency = 0.3 + 0.04*np.sin(0.05*time)
+
+
+
+# Entropy production
+
+S_dot = 0.5*stress + 0.3*np.abs(acceleration) + 0.2*latency
+
+
+
+# Dissipation capacity
+
+headroom = 1.5 - 0.002*time
+
+control_authority = 0.7 + 0.05*np.cos(0.1*time)
+
+redundancy = 0.5 + 0.03*np.sin(0.15*time)
+
+D = headroom + control_authority + redundancy
+
+
+
+# Universal Choke Index
+
+X = S_dot / (D + epsilon)
+
+
+
+# --- Adaptive Control (Auto-Throttle) ---
+
+for i in range(len(X)):
+
+    if X[i] > 0.9:
+
+        control_authority[i:] += 0.4
+
+        D[i:] = headroom[i:] + control_authority[i:] + redundancy[i:]
+
+        X[i:] = S_dot[i:] / (D[i:] + epsilon)
+
+        break
+
+
+
+# --- Predictive Echo Metric ρ(t) ---
+
+lambda1, lambda2, lambda3 = 0.5, 0.3, 0.2
+
+neighbor_corr = np.convolve(X, np.ones(5)/5, mode='same')
+
+rho = X + lambda1*np.gradient(X, dt) + lambda2*neighbor_corr + lambda3*np.abs(acceleration)
+
+
+
+# --- Cascade Detection ---
+
+cascade_flag = X >= 1.0
+
+cascade_times = time[cascade_flag]
+
+
+
+# --- Plot 1: Choke Index ---
+
+plt.figure()
+
+plt.plot(time, X)
+
+plt.axhline(0.7)
+
+plt.axhline(1.0)
+
+plt.xlabel("Time")
+
+plt.ylabel("Choke Index X(t)")
+
+plt.title("Universal Choke Index with Adaptive Control")
+
+plt.show()
+
+
+
+# --- Plot 2: Predictive Echo Metric ---
+
+plt.figure()
+
+plt.plot(time, rho)
+
+plt.axhline(1.0)
+
+plt.xlabel("Time")
+
+plt.ylabel("Echo Metric ρ(t)")
+
+plt.title("Predictive Cascade Echo Metric")
+
+plt.show()
+
+
+
+# --- Plot 3: Sector Stress ---
+
+plt.figure()
+
+plt.plot(time, thermal_stress)
+
+plt.plot(time, liquidity_stress)
+
+plt.plot(time, compute_stress)
+
+plt.xlabel("Time")
+
+plt.ylabel("Sector Stress")
+
+plt.title("Multi-Sector Stress Dynamics")
+
+plt.show()
+
+
+
+# --- Export CSV ---
+
+df = pd.DataFrame({
+
+    "time": time,
+
+    "thermal_stress": thermal_stress,
+
+    "liquidity_stress": liquidity_stress,
+
+    "compute_stress": compute_stress,
+
+    "choke_index": X,
+
+    "echo_metric": rho
+
+})
+
+
+
+csv_path = "/mnt/data/universal_choke_simulation.csv"
+
+df.to_csv(csv_path, index=False)
+
+
+
+# --- Summary Dashboard ---
+
+print("SIMULATION SUMMARY")
+
+print("-------------------")
+
+print("Max Choke Index:", round(float(np.max(X)),4))
+
+print("Max Echo Metric:", round(float(np.max(rho)),4))
+
+print("Cascade Events Detected:", len(cascade_times))
+
+print("CSV Exported To:", csv_path)
+
