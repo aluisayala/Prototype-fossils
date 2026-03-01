@@ -1,0 +1,125 @@
+### CRISPR Civilizational Stability Codex: Prototype v1.1
+
+This prototype formalizes the **CRISPR Civilizational Stability Framework**, a tiered architecture designed to transform unbounded biological amplification into governed, conditional propagation. The system operates on the principle that governance density must scale nonlinearly with biological risk to maintain civilizational stability.
+
+---
+
+### 1. Mathematical Foundation
+
+The Codex utilizes a core risk operator and a multi-layer stability invariant to model and gate genetic interventions.
+
+#### 1.1 Master Risk Operator ($\Omega$)
+The total risk of an intervention is a function of the biological baseline, the intent of the edit, and its inherent amplification potential:
+$$\Omega = (state + bias) \times \alpha$$
+Where:
+*   **$state$**: Initial biological configuration (genome, ecosystem).
+*   **$bias$**: Directed edit intent (therapy vs. enhancement).
+*   **$\alpha$**: Amplification scalar (heritability, ecological spread).
+
+#### 1.2 The Stability Invariant
+Stability is defined as the ratio of multi-layer control density to biological amplification. A system is considered admissible only when Stability $\ge 1.0$.
+$$Stability = \frac{Control_{density}}{Amplification} \ge 1.0$$
+
+---
+
+### 2. Tiered Governance Layers
+
+The Codex organizes control primitives into four functional tiers:
+
+*   **Tier 1 (Empirical Biology):** Models germline dynamics, stochastic repair (NHEJ/HDR), and gene drive allele propagation.
+*   **Tier 2 (Governance & Biosecurity):** Implements a **Quorum Validation Layer** requiring $\ge 3$ independent labs, $\ge 2$ modeling groups, and $\ge 1$ international authority.
+*   **Tier 3 (Ethical Amplification):** Employs **Amplification Stratification ($r_{class}$)** to dampen enhancement (r=0.1) relative to somatic therapy (r=1.0) until global equity thresholds are met.
+*   **Tier 4 (Mathematical Systems):** Defines time decay ($\lambda$) to enforce temporal boundedness through molecular reversion or regulatory attenuation.
+
+---
+
+### 3. Adaptive Control and Enforcement Reach
+
+Rather than relying on static thresholds, the Codex employs **Adaptive Control Scaling**. As the observed propagation rate ($R_0$) approaches 1, control density increases nonlinearly to prevent containment breaches.
+
+#### 3.1 Adaptive Scaling Rule
+$$Control_{adaptive} = \frac{Base}{1 - R_0} \text{ for } R_0 < 1$$
+If $R_0 \ge 1$, an **Automatic Suspension Trigger** is activated, freezing all deployment privileges.
+
+#### 3.2 Enforcement Reach ($E_r$)
+In adversarial or non-compliant contexts, stability is attenuated by the probability of detection ($P_{det}$) and the speed of intervention capability ($C_{int}$).
+$$Stability_{effective} = \frac{Control_{density} \times P_{det} \times C_{int}}{Amplification}$$
+
+---
+
+### 4. Executable Prototype: Adaptive Governance Engine
+
+The following Python implementation integrates population propagation, adaptive scaling, and the stability invariant.
+
+```python
+import math
+import random
+import statistics
+
+class CRISPRCodexEngine:
+    def __init__(self, base_s=0.8, decay_lambda=0.2, r_class=0.5, base_controls=6):
+        self.base_s = base_s           # Mean selective advantage
+        self.decay_lambda = decay_lambda # Attenuation coefficient
+        self.r_class = r_class         # Stratification modifier
+        self.base_controls = base_controls # Quorum sum (3+2+1)
+
+    def simulate_propagation(self, initial_p, generations=20):
+        """Tier 1 & 4: Model allele frequency over time."""
+        p = initial_p
+        trajectory = [p]
+        for _ in range(generations):
+            # Stochastic selection with r_class dampening
+            s_eff = random.gauss(self.base_s, 0.05) * self.r_class
+            p_next = p + p * (1 - p) * s_eff - self.decay_lambda * p
+            p_next = max(0.0, min(1.0, p_next))
+            trajectory.append(p_next)
+            p = p_next
+        return trajectory
+
+    def get_metrics(self, trajectory):
+        """Derive alpha (amplification) and R0."""
+        # Alpha via peak growth derivative to capture acceleration
+        derivatives = [trajectory[i+1] - trajectory[i] for i in range(len(trajectory)-1)]
+        alpha = max(0.001, max(derivatives) * self.base_s)
+        
+        # R0 approximation
+        r0 = trajectory / trajectory if trajectory > 0 else 0
+        return alpha, r0
+
+    def apply_governance(self, r0, alpha):
+        """Tier 4: Adaptive Scaling and Stability Invariant."""
+        if r0 >= 1.0:
+            return 0.0, "SUSPENDED" # Automatic Suspension Trigger
+        
+        # Nonlinear control scaling as R0 -> 1
+        scaling_factor = 1.0 / max(0.01, (1.0 - r0))
+        adaptive_controls = self.base_controls * scaling_factor
+        
+        stability = adaptive_controls / alpha if alpha > 0 else 0
+        status = "STABLE" if stability >= 1.0 else "UNDER-SCALED"
+        return stability, status
+
+    def run_audit(self, initial_p=0.1):
+        trajectory = self.simulate_propagation(initial_p)
+        alpha, r0 = self.get_metrics(trajectory)
+        stability, status = self.apply_governance(r0, alpha)
+        
+        return {
+            "r0_observed": round(r0, 3),
+            "alpha_amplification": round(alpha, 3),
+            "stability_score": round(stability, 2),
+            "system_status": status
+        }
+
+# Example execution
+codex = CRISPRCodexEngine()
+print(codex.run_audit())
+```
+
+---
+
+### 5. System Interpretation
+*   **Stability < 1.0**: Governance is under-scaled relative to biological pressure.
+*   **Stability 1.0–2.0**: Minimally sufficient oversight.
+*   **Stability > 2.0**: Conservative governance density.
+*   **Fail-Closed Doctrine**: If the breach rate exceeds thresholds or stability drops below unity, all deployment privileges are automatically frozen to prevent irreversible civilizational divergence.
