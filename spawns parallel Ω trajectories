@@ -1,0 +1,141 @@
+import hashlib
+import math
+import random
+from dataclasses import dataclass, field
+from typing import List
+
+# -----------------------------
+# Core Ω Operator
+# -----------------------------
+def omega(state: float, bias: float, alpha: float) -> float:
+    return (state + bias) * alpha
+
+
+# -----------------------------
+# SE44 Constraint Functions
+# -----------------------------
+def compute_coherence(prev: float, current: float) -> float:
+    drift = abs(current - prev)
+    return max(0.0, 1.0 - drift)
+
+
+def compute_entropy(values: List[float]) -> float:
+    if not values:
+        return 0.0
+    mean = sum(values) / len(values)
+    variance = sum((v - mean) ** 2 for v in values) / len(values)
+    return variance
+
+
+def se44_pass(coherence: float, entropy: float,
+              c_thresh=0.985, e_thresh=0.01) -> bool:
+    return coherence >= c_thresh and entropy <= e_thresh
+
+
+# -----------------------------
+# Branch Definition
+# -----------------------------
+@dataclass
+class Branch:
+    state: float
+    bias: float
+    alpha: float
+    history: List[float] = field(default_factory=list)
+    active: bool = True
+
+    def step(self):
+        if not self.active:
+            return
+
+        prev = self.state
+        self.state = omega(self.state, self.bias, self.alpha)
+        self.history.append(self.state)
+
+        coherence = compute_coherence(prev, self.state)
+        entropy = compute_entropy(self.history[-5:])  # local window
+
+        if not se44_pass(coherence, entropy):
+            self.active = False
+
+    def similarity(self, other) -> float:
+        return 1.0 - abs(self.state - other.state)
+
+
+# -----------------------------
+# Infergence Engine
+# -----------------------------
+class InfergenceEngine:
+    def __init__(self, initial_state, num_branches=5):
+        self.branches = self._init_branches(initial_state, num_branches)
+        self.tau = 0.995  # convergence threshold
+
+    def _init_branches(self, state, n):
+        branches = []
+        for _ in range(n):
+            bias = random.uniform(-0.002, 0.002)
+            alpha = 1.0 + random.uniform(-0.001, 0.001)
+            branches.append(Branch(state, bias, alpha))
+        return branches
+
+    def step_all(self):
+        for b in self.branches:
+            b.step()
+
+    def active_branches(self):
+        return [b for b in self.branches if b.active]
+
+    def check_convergence(self):
+        active = self.active_branches()
+        if len(active) < 2:
+            return True
+
+        similarities = []
+        for i in range(len(active)):
+            for j in range(i + 1, len(active)):
+                similarities.append(active[i].similarity(active[j]))
+
+        if not similarities:
+            return False
+
+        return min(similarities) >= self.tau
+
+    def collapse(self):
+        active = self.active_branches()
+        if not active:
+            return None
+
+        avg_state = sum(b.state for b in active) / len(active)
+        return avg_state
+
+    def fossilize(self, state):
+        payload = f"{state:.10f}"
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    def run(self, steps=50):
+        for t in range(steps):
+            self.step_all()
+
+            if self.check_convergence():
+                final_state = self.collapse()
+                fossil = self.fossilize(final_state)
+                return {
+                    "final_state": final_state,
+                    "fossil": fossil,
+                    "steps": t + 1
+                }
+
+        return None
+
+
+# -----------------------------
+# Execution
+# -----------------------------
+if __name__ == "__main__":
+    engine = InfergenceEngine(initial_state=0.6120, num_branches=8)
+    result = engine.run()
+
+    if result:
+        print("Converged:")
+        print(result)
+    else:
+        print("No convergence within step limit.")
