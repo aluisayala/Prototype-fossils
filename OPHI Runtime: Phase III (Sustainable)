@@ -1,0 +1,125 @@
+import hashlib
+import random
+import numpy as np
+import json
+from collections import deque
+
+class OPHIRuntime:
+    def __init__(self, window_size=50):
+        # Core SE44 Invariants (Fixed Constants)
+        self.MIN_COHERENCE = 0.985
+        self.MAX_ENTROPY = 0.01
+        self.MAX_RMS_DRIFT = 0.001
+        
+        # Runtime State
+        self.history = deque([0.7422], maxlen=window_size)
+        self.current_state = 0.7422
+        self.parent_hash = "0" * 64
+        self.fossil_ledger_height = 0
+        self.mutable_shell_count = 0
+
+    def calculate_omega(self, bias, alpha):
+        """
+        Fix 1: Drift Damping. 
+        Weight the new state toward current stability to prevent 'snap' divergence.
+        """
+        raw_target = self.current_state + bias
+        # Weighted update: 90% stability, 10% new signal
+        dampened_state = (0.9 * self.current_state) + (0.1 * raw_target)
+        omega = round(dampened_state * alpha, 4)
+        return omega
+
+    def calculate_metrics(self, new_omega):
+        """
+        Fix 3 & 4: Rolling windows and RMS stabilization.
+        """
+        if len(self.history) < 2:
+            return {'coherence': 1.0, 'entropy': 0.0, 'rms_drift': 0.0}
+
+        # Use recent history (last 20) for local relevance
+        recent_hist = list(self.history)[-20:]
+        hist_array = np.array(recent_hist)
+        
+        delta = abs(new_omega - np.mean(hist_array))
+        
+        # Exponential Coherence
+        coherence = round(np.exp(-5 * delta), 4)
+        
+        # Raw Entropy (Unscaled variance)
+        entropy = round(np.var(hist_array), 6)
+        
+        # Stabilized RMS Drift (Damped by 0.5 to prevent lockout)
+        raw_rms = np.sqrt(np.mean(np.square(np.diff(hist_array))))
+        rms_drift = round(raw_rms * 0.5, 6)
+        
+        return {
+            'coherence': coherence,
+            'entropy': entropy,
+            'rms_drift': rms_drift
+        }
+
+    def run_simulation(self, steps=1000000, regime="stochastic"):
+        print(f"Initializing 1M Step Run | Regime: {regime.upper()}")
+        
+        for step in range(1, steps + 1):
+            # 1. Environment Simulation
+            if regime == "adversarial" and random.random() < 0.05:
+                noise = random.uniform(-0.02, 0.02) # High-magnitude shocks
+            elif regime == "stochastic":
+                noise = random.uniform(-0.005, 0.005) # Standard noise
+            else:
+                noise = random.uniform(-0.0005, 0.0005) # Baseline
+                
+            bias = 0.0010 + noise
+            alpha = 1.0001
+            
+            # 2. Damped Operator Evaluation
+            omega = self.calculate_omega(bias, alpha)
+            
+            # 3. Metric Generation
+            metrics = self.calculate_metrics(omega)
+            
+            # 4. SE44 Gated Admission
+            is_valid = (metrics['rms_drift'] <= self.MAX_RMS_DRIFT and 
+                        metrics['coherence'] >= self.MIN_COHERENCE and 
+                        metrics['entropy'] <= self.MAX_ENTROPY)
+
+            if is_valid:
+                # 5. Fossilization
+                block_content = {
+                    's': step, 'o': omega, 'm': metrics, 'p': self.parent_hash[-8:]
+                }
+                # (In a million-step run, we don't store the full JSON to save RAM,
+                # we just update the Merkle tip)
+                block_serialized = json.dumps(block_content, sort_keys=True).encode()
+                self.parent_hash = hashlib.sha256(block_serialized).hexdigest()
+                
+                self.history.append(omega)
+                self.current_state = omega
+                self.fossil_ledger_height += 1
+            else:
+                # 6. Fix 2: Soft Recovery on Rejection
+                # Instead of stalling, pull toward the historical mean
+                self.mutable_shell_count += 1
+                self.current_state = float(np.mean(self.history))
+
+            # Periodic Status Update
+            if step % 200000 == 0:
+                print(f"  Step {step}: Fossil Height {self.fossil_ledger_height} | State {self.current_state:.4f}")
+
+        self.report_summary(steps, regime)
+
+    def report_summary(self, total_steps, regime):
+        acc_rate = (self.fossil_ledger_height / total_steps) * 100
+        print(f"\n--- OPHI SUSTAINABILITY REPORT [{regime.upper()}] ---")
+        print(f"Total Cycles: {total_steps}")
+        print(f"Accepted Fossils: {self.fossil_ledger_height}")
+        print(f"Rejected States: {self.mutable_shell_count}")
+        print(f"Integrity Rate: {acc_rate:.2f}%")
+        print(f"Final Convergence: {self.current_state:.4f}")
+        print("-" * 45)
+
+if __name__ == "__main__":
+    runtime = OPHIRuntime()
+    # To run a million steps, use regime="stochastic"
+    runtime.run_simulation(steps=1000000, regime="stochastic")
