@@ -1,0 +1,176 @@
+import hashlib
+import random
+from dataclasses import dataclass, field
+from typing import List
+
+# -----------------------------
+# Core Ω Operator
+# -----------------------------
+def omega(state: float, bias: float, alpha: float) -> float:
+    return (state + bias) * alpha
+
+
+# -----------------------------
+# SE44 Constraint Functions
+# -----------------------------
+def compute_coherence(prev: float, current: float) -> float:
+    drift = abs(current - prev)
+    return max(0.0, 1.0 - drift)
+
+
+def compute_entropy(values: List[float]) -> float:
+    if not values:
+        return 0.0
+    mean = sum(values) / len(values)
+    variance = sum((v - mean) ** 2 for v in values) / len(values)
+    return variance
+
+
+# -----------------------------
+# Branch Definition
+# -----------------------------
+@dataclass
+class Branch:
+    state: float
+    bias: float
+    alpha: float
+    history: List[float] = field(default_factory=list)
+    active: bool = True
+
+    def step(self, c_thresh: float, e_thresh: float):
+        if not self.active:
+            return
+
+        prev = self.state
+
+        # Ω evolution
+        self.state = omega(self.state, self.bias, self.alpha)
+        self.history.append(self.state)
+
+        coherence = compute_coherence(prev, self.state)
+        entropy = compute_entropy(self.history[-5:])
+
+        # SE44 enforcement
+        if not (coherence >= c_thresh and entropy <= e_thresh):
+            self.active = False
+
+    def similarity(self, other) -> float:
+        # amplify divergence sensitivity
+        sim = 1.0 - abs(self.state - other.state)
+        return sim ** 2
+
+
+# -----------------------------
+# Infergence Engine v2
+# -----------------------------
+class InfergenceEngineV2:
+    def __init__(self, initial_state: float, num_branches: int = 8):
+        self.branches = self._init_branches(initial_state, num_branches)
+
+        # convergence control
+        self.tau = 0.999
+        self.min_tau = 0.990
+        self.warmup_steps = 5
+
+    def _init_branches(self, state, n):
+        branches = []
+        for _ in range(n):
+            bias = random.uniform(-0.01, 0.01)          # ↑ divergence
+            alpha = 1.0 + random.uniform(-0.005, 0.005)
+            branches.append(Branch(state, bias, alpha))
+        return branches
+
+    def active_branches(self):
+        return [b for b in self.branches if b.active]
+
+    def inject_noise(self, b: Branch):
+        noise = random.uniform(-0.001, 0.001)
+        b.state += noise
+
+    def dynamic_se44(self, t):
+        # progressively tighten constraints
+        c_thresh = 0.98 + 0.005 * min(1.0, t / 20)
+        e_thresh = 0.02 * (1.0 - min(1.0, t / 20))
+        return c_thresh, e_thresh
+
+    def step_all(self, t):
+        c_thresh, e_thresh = self.dynamic_se44(t)
+
+        for b in self.branches:
+            if not b.active:
+                continue
+
+            # inject stochastic divergence
+            self.inject_noise(b)
+
+            # execute constrained step
+            b.step(c_thresh, e_thresh)
+
+    def check_convergence(self, t):
+        if t < self.warmup_steps:
+            return False
+
+        active = self.active_branches()
+        if len(active) < 2:
+            return True
+
+        similarities = []
+        for i in range(len(active)):
+            for j in range(i + 1, len(active)):
+                similarities.append(active[i].similarity(active[j]))
+
+        if not similarities:
+            return False
+
+        # relax convergence threshold over time
+        self.tau = max(self.min_tau, self.tau - 0.0005)
+
+        return min(similarities) >= self.tau
+
+    def collapse(self):
+        active = self.active_branches()
+        if not active:
+            return None
+
+        # entropy-weighted collapse (favor stability)
+        weights = []
+        for b in active:
+            ent = compute_entropy(b.history[-5:])
+            weights.append(1.0 / (1e-6 + ent))
+
+        total_w = sum(weights)
+        return sum(b.state * w for b, w in zip(active, weights)) / total_w
+
+    def fossilize(self, state):
+        payload = f"{state:.10f}"
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    def run(self, steps=50):
+        for t in range(steps):
+            self.step_all(t)
+
+            if self.check_convergence(t):
+                final_state = self.collapse()
+                fossil = self.fossilize(final_state)
+
+                return {
+                    "final_state": final_state,
+                    "fossil": fossil,
+                    "steps": t + 1,
+                    "survivors": len(self.active_branches())
+                }
+
+        return {
+            "status": "no_convergence",
+            "survivors": len(self.active_branches())
+        }
+
+
+# -----------------------------
+# Execution
+# -----------------------------
+if __name__ == "__main__":
+    engine = InfergenceEngineV2(initial_state=0.6120, num_branches=8)
+    result = engine.run(steps=50)
+
+    print(result)
