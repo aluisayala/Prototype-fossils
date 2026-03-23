@@ -1,0 +1,109 @@
+import hashlib
+import time
+import json
+import numpy as np
+from collections import deque
+
+class OPHIHardenedKernel:
+    def __init__(self, window_size=50):
+        # SE44 Invariant Thresholds
+        self.MIN_COHERENCE = 0.985
+        self.MAX_ENTROPY = 0.01
+        self.MAX_RMS_DRIFT = 0.001
+        
+        # Identity & Ledger State
+        self.parent_hash = "0" * 64
+        self.fossil_ledger_height = 0
+        self.mutable_shell_count = 0
+        
+        # Runtime State
+        self.current_state = 0.7422
+        self.history = deque([0.7422], maxlen=window_size)
+        self.start_time = time.time()
+
+    def calculate_shannon_entropy(self, data):
+        """Fix: Upgrade from variance to true Shannon Entropy."""
+        if len(data) < 2: return 0.0
+        # Create probability distribution via histogram normalization
+        counts, _ = np.histogram(data, bins=10)
+        probs = counts / np.sum(counts)
+        probs = probs[probs > 0] # Avoid log(0)
+        return -np.sum(probs * np.log2(probs))
+
+    def compute_reliability(self, metrics):
+        """Fix: Implement the r_i Reliability/Provenance Scalar."""
+        return (
+            0.4 * metrics['coherence'] +
+            0.3 * (1 - min(metrics['entropy'], 1)) +
+            0.3 * (1 - min(metrics['rms_drift'] / self.MAX_RMS_DRIFT, 1))
+        )
+
+    def se44_gate(self, metrics):
+        """The Governance Boundary: Hard enforcement of synchronization."""
+        return (
+            metrics['coherence'] >= self.MIN_COHERENCE and
+            metrics['entropy'] <= self.MAX_ENTROPY and
+            metrics['rms_drift'] <= self.MAX_RMS_DRIFT
+        )
+
+    def fossilize(self, omega, metrics, r_i):
+        """The Append-Only Ledger: Cryptographic hash chain creation."""
+        entry = {
+            "h": self.fossil_ledger_height,
+            "o": round(omega, 4),
+            "m": metrics,
+            "r": round(r_i, 4),
+            "p_hash": self.parent_hash,
+            "ts": time.time() - self.start_time
+        }
+        
+        # Create SHA-256 Link
+        canonical = json.dumps(entry, sort_keys=True).encode()
+        new_hash = hashlib.sha256(canonical).hexdigest()
+        
+        self.parent_hash = new_hash
+        self.fossil_ledger_height += 1
+        return new_hash
+
+    def evaluate_step(self, bias, alpha):
+        # 1. Adaptive Damping
+        # High stability allows more influence; low stability forces contraction
+        stability_factor = 0.9 # Base damping
+        raw_target = self.current_state + bias
+        dampened_state = (stability_factor * self.current_state) + ((1 - stability_factor) * raw_target)
+        
+        # 2. Initial Metrics (Pre-Gate)
+        recent_hist = list(self.history)[-20:]
+        delta = abs(dampened_state - np.mean(recent_hist))
+        
+        metrics = {
+            'coherence': round(np.exp(-5 * delta), 4),
+            'entropy': round(self.calculate_shannon_entropy(recent_hist), 6),
+            'rms_drift': round(np.sqrt(np.mean(np.square(np.diff(recent_hist)))) * 0.5, 6)
+        }
+        
+        # 3. Reliability Scalar (r_i)
+        r_i = self.compute_reliability(metrics)
+        
+        # 4. Final Omega Calculation (identity-bound amplification)
+        omega = round(dampened_state * alpha * r_i, 4)
+
+        # 5. SE44 Gate & Branching Path
+        if self.se44_gate(metrics):
+            # Success Path: Commit to Ledger
+            self.history.append(omega)
+            self.current_state = omega
+            block_hash = self.fossilize(omega, metrics, r_i)
+            return {"status": "FOSSILIZED", "hash": block_hash[:8], "val": omega}
+        else:
+            # Failure Path: Redirect to Mutable Shell
+            self.mutable_shell_count += 1
+            # Soft Recovery: Re-center toward mean
+            self.current_state = float(np.mean(self.history))
+            return {"status": "MUTABLE_SHELL", "val": omega}
+
+# --- Execution Simulation ---
+kernel = OPHIHardenedKernel()
+for i in range(1, 6):
+    result = kernel.evaluate_step(bias=0.001, alpha=1.002)
+    print(f"Cycle {i}: [{result['status']}] Value: {result['val']} | Height: {kernel.fossil_ledger_height}")
