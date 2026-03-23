@@ -1,0 +1,143 @@
+import random
+import matplotlib.pyplot as plt
+import imageio
+from dataclasses import dataclass, field
+from typing import List
+
+# -----------------------------
+# Ω Operator
+# -----------------------------
+def omega(state, bias, alpha):
+    return (state + bias) * alpha
+
+
+# -----------------------------
+# Metrics
+# -----------------------------
+def compute_entropy(values):
+    if not values:
+        return 0.0
+    mean = sum(values) / len(values)
+    return sum((v - mean) ** 2 for v in values) / len(values)
+
+
+def compute_coherence(prev, current):
+    return max(0.0, 1.0 - abs(current - prev))
+
+
+# -----------------------------
+# Branch
+# -----------------------------
+@dataclass
+class Branch:
+    state: float
+    bias: float
+    alpha: float
+    history: List[float] = field(default_factory=list)
+    active: bool = True
+
+    def step(self):
+        prev = self.state
+        self.state = omega(self.state, self.bias, self.alpha)
+        self.history.append(self.state)
+        return prev, self.state
+
+    def entropy(self):
+        return compute_entropy(self.history[-5:])
+
+
+# -----------------------------
+# Engine (phased)
+# -----------------------------
+class Engine:
+    def __init__(self, initial_state, n=12):
+        self.branches = [
+            Branch(
+                initial_state,
+                random.uniform(-0.02, 0.02),
+                1.0 + random.uniform(-0.01, 0.01)
+            )
+            for _ in range(n)
+        ]
+
+    def active(self):
+        return [b for b in self.branches if b.active]
+
+    def constraints(self, t):
+        if t < 10:
+            return 0.95, 0.05
+        elif t < 25:
+            return 0.98, 0.02
+        else:
+            return 0.985, 0.01
+
+    def step(self, t):
+        c_thresh, e_thresh = self.constraints(t)
+
+        for b in self.active():
+            b.state += random.uniform(-0.002, 0.002)
+            prev, curr = b.step()
+
+            c = compute_coherence(prev, curr)
+            e = b.entropy()
+
+            if c < c_thresh or e > e_thresh:
+                b.active = False
+
+
+# -----------------------------
+# Visualization
+# -----------------------------
+def render_frame(branches, t):
+    xs_active, ys_active = [], []
+    xs_dead, ys_dead = [], []
+
+    for i, b in enumerate(branches):
+        if b.active:
+            xs_active.append(t)
+            ys_active.append(b.state)
+        else:
+            xs_dead.append(t)
+            ys_dead.append(b.state)
+
+    plt.figure(figsize=(6,4))
+
+    # active = strong signal
+    plt.scatter(xs_active, ys_active, label="active")
+
+    # dead = faded
+    plt.scatter(xs_dead, ys_dead, alpha=0.2, label="pruned")
+
+    plt.title(f"t = {t}")
+    plt.xlabel("time")
+    plt.ylabel("state")
+    plt.ylim(0.55, 0.65)
+    plt.legend()
+
+    fname = f"frame_{t}.png"
+    plt.savefig(fname)
+    plt.close()
+
+    return fname
+
+
+# -----------------------------
+# Run + Capture
+# -----------------------------
+def run_timelapse():
+    engine = Engine(initial_state=0.612, n=12)
+    frames = []
+
+    for t in range(40):
+        engine.step(t)
+        frame = render_frame(engine.branches, t)
+        frames.append(imageio.imread(frame))
+
+    imageio.mimsave("branch_collapse.gif", frames, duration=0.3)
+
+
+# -----------------------------
+# Execute
+# -----------------------------
+if __name__ == "__main__":
+    run_timelapse()
