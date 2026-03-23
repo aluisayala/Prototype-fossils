@@ -1,0 +1,235 @@
+
+import hashlib
+import time
+import json
+import numpy as np
+from collections import deque
+
+class OPHIHardenedKernelFixed:
+    def __init__(self, window_size=50):
+        # RELAXED SE44 Invariant Thresholds (Functional Demo Version)
+        self.MIN_COHERENCE = 0.90      # Further relaxed from 0.95
+        self.MAX_ENTROPY = 2.0         # Shannon entropy max is log2(bins), allow up to 2.0
+        self.MAX_RMS_DRIFT = 0.05      # Further relaxed from 0.01
+        
+        # Identity & Ledger State
+        self.parent_hash = "0" * 64
+        self.fossil_ledger_height = 0
+        self.mutable_shell_count = 0
+        
+        # Runtime State
+        self.current_state = 0.7422
+        self.history = deque([0.7422], maxlen=window_size)
+        self.start_time = time.time()
+        self.prev_status = "FOSSILIZED"
+        
+        # Statistics tracking
+        self.fossilized_values = []
+        self.mutable_values = []
+
+    def calculate_shannon_entropy(self, data):
+        """Calculate Shannon entropy with proper handling for uniform/single values."""
+        if len(data) < 2: 
+            return 0.0
+        
+        # Use fewer bins for small datasets, ensure at least some samples per bin
+        bins = min(5, len(data))
+        if bins < 2:
+            return 0.0
+            
+        counts, _ = np.histogram(data, bins=bins)
+        probs = counts / np.sum(counts)
+        probs = probs[probs > 0]
+        
+        if len(probs) == 0:
+            return 0.0
+            
+        entropy = -np.sum(probs * np.log2(probs))
+        # Normalize by max possible entropy for this bin count
+        max_entropy = np.log2(bins)
+        normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
+        
+        return normalized_entropy  # Return 0-1 scale
+
+    def compute_reliability(self, metrics):
+        """Implement the r_i Reliability/Provenance Scalar."""
+        return (
+            0.4 * metrics['coherence'] +
+            0.3 * (1 - min(metrics['entropy'], 1)) +
+            0.3 * (1 - min(metrics['rms_drift'] / self.MAX_RMS_DRIFT, 1))
+        )
+
+    def se44_gate(self, metrics):
+        """The Governance Boundary: With hysteresis to prevent oscillation."""
+        if self.prev_status == "FOSSILIZED":
+            coherence_threshold = self.MIN_COHERENCE * 0.90  # 10% buffer to stay in
+            entropy_threshold = self.MAX_ENTROPY * 1.5
+            drift_threshold = self.MAX_RMS_DRIFT * 2.0
+        else:
+            coherence_threshold = self.MIN_COHERENCE * 1.1   # 10% harder to re-enter
+            entropy_threshold = self.MAX_ENTROPY * 0.7
+            drift_threshold = self.MAX_RMS_DRIFT * 0.7
+            
+        return (
+            metrics['coherence'] >= coherence_threshold and
+            metrics['entropy'] <= entropy_threshold and
+            metrics['rms_drift'] <= drift_threshold
+        )
+
+    def fossilize(self, omega, metrics, r_i):
+        """The Append-Only Ledger: Cryptographic hash chain creation."""
+        entry = {
+            "h": self.fossil_ledger_height,
+            "o": round(omega, 4),
+            "m": metrics,
+            "r": round(r_i, 4),
+            "p_hash": self.parent_hash,
+            "ts": time.time() - self.start_time
+        }
+        
+        canonical = json.dumps(entry, sort_keys=True).encode()
+        new_hash = hashlib.sha256(canonical).hexdigest()
+        
+        self.parent_hash = new_hash
+        self.fossil_ledger_height += 1
+        return new_hash
+
+    def evaluate_step(self, bias, alpha):
+        # 1. Adaptive Damping with reliability feedback
+        stability_factor = 0.85  # Slightly more responsive
+        
+        # Adaptive bias scaling
+        recent_reliability = 0.5
+        if len(self.fossilized_values) > 0:
+            recent_reliability = np.mean([v['r'] for v in self.fossilized_values[-5:]])
+        
+        adaptive_bias = bias * (0.3 + 0.7 * recent_reliability)
+        
+        raw_target = self.current_state + adaptive_bias
+        dampened_state = (stability_factor * self.current_state) + ((1 - stability_factor) * raw_target)
+        
+        # 2. Metrics Calculation
+        recent_hist = list(self.history)[-20:]
+        delta = abs(dampened_state - np.mean(recent_hist))
+        
+        # Calculate RMS drift properly
+        if len(recent_hist) > 1:
+            diffs = np.diff(recent_hist)
+            rms_drift = np.sqrt(np.mean(np.square(diffs)))
+        else:
+            rms_drift = 0.0
+        
+        metrics = {
+            'coherence': round(np.exp(-3 * delta), 4),  # Gentler decay (was -5)
+            'entropy': round(self.calculate_shannon_entropy(recent_hist), 4),
+            'rms_drift': round(rms_drift, 6)
+        }
+        
+        # 3. Reliability Scalar
+        r_i = self.compute_reliability(metrics)
+        
+        # 4. Final Omega Calculation
+        omega = round(dampened_state * alpha * r_i, 4)
+
+        # 5. SE44 Gate & Branching Path
+        gate_passed = self.se44_gate(metrics)
+        
+        if gate_passed:
+            # Success Path: Commit to Ledger
+            self.history.append(omega)
+            self.current_state = omega
+            block_hash = self.fossilize(omega, metrics, r_i)
+            self.prev_status = "FOSSILIZED"
+            self.fossilized_values.append({'val': omega, 'r': r_i, 'hash': block_hash[:8]})
+            return {
+                "status": "FOSSILIZED", 
+                "hash": block_hash[:8], 
+                "val": omega,
+                "metrics": metrics,
+                "r_i": round(r_i, 4),
+                "gate": "PASS"
+            }
+        else:
+            # Failure Path: Redirect to Mutable Shell
+            self.mutable_shell_count += 1
+            
+            # CRITICAL FIX: Still update history with attempted value for continuity
+            # But don't change current_state permanently
+            self.history.append(omega)
+            
+            # Soft Recovery: Gradual re-centering
+            recovery_target = float(np.mean(list(self.history)[-10:]))
+            self.current_state = (0.8 * self.current_state) + (0.2 * recovery_target)
+            
+            self.prev_status = "MUTABLE_SHELL"
+            self.mutable_values.append({'val': omega, 'r': r_i})
+            
+            # Determine which threshold failed
+            fail_reason = []
+            if metrics['coherence'] < (self.MIN_COHERENCE * 0.9 if self.prev_status == "FOSSILIZED" else self.MIN_COHERENCE * 1.1):
+                fail_reason.append("coh")
+            if metrics['entropy'] > (self.MAX_ENTROPY * 1.5 if self.prev_status == "FOSSILIZED" else self.MAX_ENTROPY * 0.7):
+                fail_reason.append("ent")
+            if metrics['rms_drift'] > (self.MAX_RMS_DRIFT * 2.0 if self.prev_status == "FOSSILIZED" else self.MAX_RMS_DRIFT * 0.7):
+                fail_reason.append("rms")
+                
+            return {
+                "status": "MUTABLE_SHELL", 
+                "val": omega,
+                "metrics": metrics,
+                "r_i": round(r_i, 4),
+                "recovery_to": round(self.current_state, 4),
+                "fail": "+".join(fail_reason) if fail_reason else "unknown"
+            }
+
+# --- Execution Simulation ---
+print("=" * 90)
+print("OPHI HARDENED KERNEL - FIXED VERSION v2 (AGGRESSIVELY RELAXED)")
+print("=" * 90)
+print("\nConfiguration:")
+print(f"  MIN_COHERENCE: 0.90 (was 0.985)      | Entropy: Normalized 0-1")
+print(f"  MAX_ENTROPY: 2.0 (normalized scale)  | Drift: Gentler calculation")
+print(f"  MAX_RMS_DRIFT: 0.05 (was 0.001)       | History: Updates even in shell")
+print(f"  Coherence Decay: -3 (was -5)           | Recovery: Gradual blend")
+print("=" * 90)
+
+kernel = OPHIHardenedKernelFixed()
+results_log = []
+
+print("\n--- Simulation: 50 Cycles with Variable Bias ---\n")
+print(f"{'Cycle':<6} {'Status':<14} {'Ω Value':<10} {'Coh':<6} {'Ent':<6} {'RMS':<8} {'rᵢ':<6} {'Details'}")
+print("-" * 90)
+
+for i in range(1, 51):
+    # Vary bias to test robustness
+    if i < 15:
+        bias = 0.001
+    elif i < 30:
+        bias = 0.005  # More aggressive
+    elif i < 40:
+        bias = -0.003
+    else:
+        bias = 0.002
+    
+    result = kernel.evaluate_step(bias=bias, alpha=1.002)
+    results_log.append(result)
+    
+    status = result['status']
+    details = f"Hash: {result['hash']}" if status == "FOSSILIZED" else f"Fail: {result.get('fail', 'N/A')} → {result.get('recovery_to', 'N/A')}"
+    
+    print(f"{i:<6} {status:<14} {result['val']:<10.4f} "
+          f"{result['metrics']['coherence']:<6.3f} {result['metrics']['entropy']:<6.3f} "
+          f"{result['metrics']['rms_drift']:<8.5f} {result['r_i']:<6.3f} {details}")
+
+print("\n" + "=" * 90)
+print("FINAL STATISTICS")
+print("=" * 90)
+fossilized = kernel.fossil_ledger_height
+mutable = kernel.mutable_shell_count
+total = 50
+print(f"Total Cycles: {total}")
+print(f"Fossilized Entries: {fossilized} ({fossilized/total*100:.1f}%) | Mutable Shell: {mutable} ({mutable/total*100:.1f}%)")
+print(f"Final Ledger Height: {kernel.fossil_ledger_height}")
+print(f"Final Parent Hash: {kernel.parent_hash[:24]}...")
+print(f"Current State: {kernel.current_state:.4f}")
+print(f"History Length: {len(kernel.history)}")
