@@ -1,0 +1,101 @@
+Initializing Legacy Box v2...
+Loaded 4 functions
+
+Capturing baseline behavior...
+Captured 15 execution traces
+
+╔══════════════════════════════════════════════════════════════════╗
+║     LEGACY BOX v2 - Execution-Backed Autonomous Control          ║
+║                                                                  ║
+║  Validation: REAL (AST → Compile → Execute → Compare)            ║
+╚══════════════════════════════════════════════════════════════════╝
+
+
+############################################################
+ITERATION 1/3
+############################################################
+Selected: ISOLATE_PURE_CORE on demo_module.simple_helper (score: 0.478)
+
+============================================================
+EXECUTING: ISOLATE_PURE_CORE on demo_module.simple_helper
+============================================================
+[1] PRE-FLIGHT CHECKS
+    Risk score: 0.030 (LOW_RISK)
+[2] LOADING ORIGINAL FUNCTION
+    ✓ Compiled: simple_helper
+[3] APPLYING TRANSFORMATION
+    ✓ Transformation applied: {'isolated': True}
+[4] VALIDATION (Execution-Backed)
+    Compiling transformed AST...
+    Executing against oracle test suite...
+    ✓ VALIDATION PASSED
+      Confidence: 1.000
+      All 2 test cases passed
+      Performance: -60.1% vs original
+[5] COMMITTING TRANSFORMATION
+    ✓ COMMITTED to codebase
+
+✓ SUCCESS: Transformation committed
+
+############################################################
+ITERATION 2/3
+############################################################
+Selected: ISOLATE_PURE_CORE on demo_module.simple_helper (score: 0.478)
+
+============================================================
+EXECUTING: ISOLATE_PURE_CORE on demo_module.simple_helper
+============================================================
+[1] PRE-FLIGHT CHECKS
+    Risk score: 0.030 (LOW_RISK)
+[2] LOADING ORIGINAL FUNCTION
+    ✓ Compiled: simple_helper
+[3] APPLYING TRANSFORMATION
+    ✓ Transformation applied: {'isolated': True}
+[4] VALIDATION (Execution-Backed)
+    Compiling transformed AST...
+    Executing against oracle test suite...
+    ✓ VALIDATION PASSED
+      Confidence: 1.000
+      All 2 test cases passed
+      Performance: -39.5% vs original
+[5] COMMITTING TRANSFORMATION
+    ✓ COMMITTED to codebase
+
+✓ SUCCESS: Transformation committed
+
+############################################################
+ITERATION 3/3
+############################################################
+Selected: ISOLATE_PURE_CORE on demo_module.simple_helper (score: 0.478)
+
+============================================================
+EXECUTING: ISOLATE_PURE_CORE on demo_module.simple_helper
+============================================================
+[1] PRE-FLIGHT CHECKS
+    Risk score: 0.030 (LOW_RISK)
+[2] LOADING ORIGINAL FUNCTION
+    ✓ Compiled: simple_helper
+[3] APPLYING TRANSFORMATION
+    ✓ Transformation applied: {'isolated': True}
+[4] VALIDATION (Execution-Backed)
+    Compiling transformed AST...
+    Executing against oracle test suite...
+    ✓ VALIDATION PASSED
+      Confidence: 1.000
+      All 2 test cases passed
+      Performance: -49.3% vs original
+[5] COMMITTING TRANSFORMATION
+    ✓ COMMITTED to codebase
+
+✓ SUCCESS: Transformation committed
+
+============================================================
+SESSION SUMMARY
+============================================================
+Attempted: 3
+Successful: 3
+Failed: 0
+
+Final system state:
+  Functions: 4
+  Avg complexity: 4.00
