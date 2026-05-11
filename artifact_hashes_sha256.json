@@ -1,0 +1,12 @@
+{
+  "00_ophi_default_4panel.png": "4ba03f176f38c1545f2120be0ad0523a45dea80cfcf59c8f1f7bc622de122da7",
+  "01_trajectory.png": "a71aea28ddb3415b1d45edfcb107dfbc57e8bd13292aaacf49d63a3fa5f6e878",
+  "02_phase_portrait.png": "eb2173ce4cade959450c4b9ced8e794731572a3eb5207dbc2879901f9b9c32a2",
+  "03_density_heatmap.png": "a43541d87bbb9b2b9a179be4eb87a489017cf0b6b0000db8dca503a921182308",
+  "04_rgb_state_space_image.png": "13cbc379868c3b0d1a6426133d362afd60f2228434e292bc2d8b461451de496f",
+  "mutable_shell_rejections.json": "db6c90e5cc6c50342877201ad3926dba6b1ef935c81c681169a0b4a3095709ae",
+  "ophi_state_space_ledger.csv": "3ef564c595c14768da9f90abf39327de928f1eeb2068c43679385e3a03afbe80",
+  "ophi_state_space_ledger.json": "a219eb1215d74f84936f0fd32880c0bccc2f930c35d898b8ec0ebc48ae0ce43e",
+  "verification_report.json": "eb8b45ae246cf9767bf3b944ca96fe5e6df315525eda0b104bb5fd609da9eb4f",
+  "verification_report.txt": "a25fda255081269fa65689c4f8e163da16f6695235a67e16bdf16ce96f550e39"
+}
