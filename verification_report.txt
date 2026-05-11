@@ -1,0 +1,32 @@
+OPHI STATE SPACE VERIFICATION REPORT
+====================================
+Generated UTC: 2026-05-10T04:00:38.494783Z
+Operator: Omega = (state + bias) * alpha * reliability * grounding
+Scale: 10000
+Gate: C >= 0.9850; S <= 0.0100; RMS/Drift <= 0.0010
+
+Parameters:
+  steps: 320
+  seed: 2405198673
+  initial: 0.684217
+  bias: -0.00294
+  alpha: 1.00341
+  reliability: 0.99872
+  grounding: 1.0
+  size: 1024
+  promotion_gain: 0.25
+  noise_amplitude_scaled: 1
+  out: /mnt/data/outputs_ophi_fresh_001
+
+Accepted fossil states: 320
+Rejected mutable-shell states: 0
+Ledger root/final hash: a8d83f1d0ec1582b56bcef1f7799e0d4488f62c6a13f590fa515f823615ad4ad
+
+Artifact SHA-256 hashes:
+  01_trajectory.png: d371bdeb044a8756733ce91c766c6431b8dc9ff7bfb5967cdae52bc35f3e27b9
+  02_phase_portrait.png: c7cd1d21f6bd543af629d2e3db46dccaa668f138b707dc949adfc13632b25047
+  03_density_heatmap.png: 3ce1335471af3a5a0c92bcac443dec37f3d38354c83c33ee361a19f45da246d2
+  04_rgb_state_space_image.png: 0084187795145efb754e8d2798dcfd4a661328b97a4ac03b873024bc08b360e5
+  ophi_state_space_ledger.json: 416d763344d3fdf832fefa7f29e0596a2ba02935129db7d171d6b8848b924f6d
+  ophi_state_space_ledger.csv: 55763a0998d2981439a89321ddf929c3a2c0e20898d8734530b26b227f978c8f
+  mutable_shell_rejections.json: 37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570
